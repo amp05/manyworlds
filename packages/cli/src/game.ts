@@ -115,18 +115,18 @@ function renderAsciiMap(map: FloorMap, visitedIds: string[], frontierIds: string
   const frontier = new Set(frontierIds);
   const currentId = visitedIds[visitedIds.length - 1];
 
-  // Group nodes by row
+  // Group by row, sort top-down (boss at top)
   const rowMap = new Map<number, MapNode[]>();
   for (const node of map.nodes) {
     const arr = rowMap.get(node.row) ?? [];
     arr.push(node);
     rowMap.set(node.row, arr);
   }
-  const rows = [...rowMap.entries()].sort((a, b) => b[0] - a[0]); // top = boss
+  const rows = [...rowMap.entries()].sort((a, b) => b[0] - a[0]);
   const maxCols = Math.max(...[...rowMap.values()].map((r) => r.length));
-  const cellW = 10;
+  const cellW = 10; // width per cell (8 chars for label + 2 spacing)
 
-  // Build edge lookup
+  // Edges: from → set of to
   const edgesFrom = new Map<string, Set<string>>();
   for (const [from, to] of map.edges) {
     const s = edgesFrom.get(from) ?? new Set();
@@ -134,56 +134,60 @@ function renderAsciiMap(map: FloorMap, visitedIds: string[], frontierIds: string
     edgesFrom.set(from, s);
   }
 
+  /** Get x-center for a node in its row */
+  function getCenter(rowNodes: MapNode[], idx: number): number {
+    const rowPad = Math.floor((maxCols - rowNodes.length) / 2);
+    return (rowPad + idx) * cellW + 4;
+  }
+
   for (let ri = 0; ri < rows.length; ri++) {
     const [, rowNodes] = rows[ri];
-    const pad = ' '.repeat(Math.max(0, Math.floor((maxCols - rowNodes.length) / 2) * cellW));
+    const rowPad = Math.floor((maxCols - rowNodes.length) / 2);
+    const padStr = ' '.repeat(rowPad * cellW);
 
-    // Node line
+    // Render node labels
     const parts = rowNodes.map((node) => {
       const label = nodeLabel(node.type);
       const color = nodeColor(node.type);
-      const isCurrent = node.id === currentId;
       const isFrontier = frontier.has(node.id);
       const isVisited = visited.has(node.id);
+      const isCurrent = node.id === currentId;
 
       if (isCurrent) {
-        return colorize(`[${label}]`, COLORS.player, true) + '  ';
+        return colorize(`>${label}<`, COLORS.player, true) + ' ';
       } else if (isFrontier) {
-        return colorize(`[${label}]`, color, true) + '  ';
+        return colorize(`[${label}]`, color, true) + ' ';
       } else if (isVisited) {
-        return colorize(` ${label} `, COLORS.fgDim) + '  ';
+        return colorize(` ${label} `, COLORS.fgDim) + ' ';
       } else {
-        return colorize(` ${label} `, COLORS.border) + '  ';
+        return colorize(` ${label} `, COLORS.border) + ' ';
       }
     });
-    print(`  ${pad}${parts.join('')}`);
+    print(`  ${padStr}${parts.join('')}`);
 
-    // Connection lines to next row
+    // Draw connection lines to the next row below
     if (ri < rows.length - 1) {
       const [, nextNodes] = rows[ri + 1];
-      const nextPad = Math.floor((maxCols - nextNodes.length) / 2) * cellW;
-      const thispad = Math.floor((maxCols - rowNodes.length) / 2) * cellW;
       const lineW = maxCols * cellW + 10;
       const chars: string[] = new Array(lineW).fill(' ');
 
-      for (const node of rowNodes) {
-        const col = rowNodes.indexOf(node);
-        const center = thispad + col * cellW + 4;
+      for (let ci = 0; ci < rowNodes.length; ci++) {
+        const node = rowNodes[ci];
+        const cx = getCenter(rowNodes, ci);
         const targets = edgesFrom.get(node.id);
         if (!targets) continue;
         for (const tid of targets) {
-          const tn = nextNodes.find((n) => n.id === tid);
-          if (!tn) continue;
-          const tc = nextNodes.indexOf(tn);
-          const tcenter = nextPad + tc * cellW + 4;
-          if (center === tcenter) {
-            chars[center] = '|';
-          } else if (center < tcenter) {
-            chars[center] = '\\';
-            for (let c = center + 1; c < tcenter; c++) if (chars[c] === ' ') chars[c] = '-';
+          const ti = nextNodes.findIndex((n) => n.id === tid);
+          if (ti === -1) continue;
+          const tx = getCenter(nextNodes, ti);
+          if (cx === tx) {
+            chars[cx] = '|';
+          } else if (cx < tx) {
+            if (chars[cx] === ' ') chars[cx] = '\\';
+            for (let c = cx + 1; c < tx; c++) if (chars[c] === ' ') chars[c] = '-';
           } else {
-            chars[tcenter] = '/';
-            for (let c = tcenter + 1; c < center; c++) if (chars[c] === ' ') chars[c] = '-';
+            if (chars[tx] === ' ') chars[tx] = '/';
+            for (let c = tx + 1; c < cx; c++) if (chars[c] === ' ') chars[c] = '-';
           }
         }
       }
@@ -569,7 +573,7 @@ async function runCombat(
     const actualRecovery = Math.min(hpRecovery, player.stats.maxHp - player.stats.hp);
     player.stats.hp += actualRecovery;
     if (actualRecovery > 0) {
-      print(colorize(`  Recovered ${actualRecovery} HP after victory.`, COLORS.success));
+      print(colorize(`  Caught your breath. +${actualRecovery} HP`, COLORS.success));
     }
     for (const a of player.abilities) {
       a.currentCooldown = 0;
@@ -1041,7 +1045,7 @@ async function showDefeat(state: RunState): Promise<void> {
   printBlank();
   print(header('D E F E A T'));
   printBlank();
-  print(colorize('  The ash claims another wanderer.', COLORS.hpLow));
+  print(colorize(`  The ${state.content.world.name} claims another wanderer.`, COLORS.hpLow));
   printBlank();
   printSep();
   print(`  ${colorize('Character:', COLORS.fg)} ${state.player.name} Lv${state.player.level}`);

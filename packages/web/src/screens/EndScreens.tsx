@@ -100,7 +100,7 @@ export function VictoryScreen() {
 }
 
 export function DefeatScreen() {
-  const { player, blessing, visitedNodeIds } = useGameStore();
+  const { player, blessing, visitedNodeIds, content } = useGameStore();
   if (!player) return null;
 
   return (
@@ -108,7 +108,7 @@ export function DefeatScreen() {
       <Header title="D E F E A T" />
       <pre className="term-block">
 {'\n'}
-<Span color={C.hpLow}>  The ash claims another wanderer.</Span>{'\n'}
+<Span color={C.hpLow}>  The {content?.world.name ?? 'wastes'} claims another wanderer.</Span>{'\n'}
 {'\n'}
 <Sep />
 {'  '}<Span color={C.dim}>Character:  </Span><Span color={C.fg}>{player.name} Lv{player.level}</Span>{'\n'}
