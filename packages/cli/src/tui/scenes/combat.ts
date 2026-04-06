@@ -502,7 +502,14 @@ export async function runCombatScene(
     // Brief pause
     await screen.sleep(playerResult.events.some((e) => e.includes('damage') || e.includes('defeated')) ? 300 : 200);
 
-    if (combat.status !== 'active') break;
+    if (combat.status !== 'active') {
+      // Show final state and wait for input before leaving combat
+      render(playerResult.events, false, playerResult.blessingFired);
+      screen.text(L.pad, L.menuY + 1, combat.status === 'victory' ? '  All enemies defeated! Press ENTER.' : '  You have fallen. Press ENTER.', combat.status === 'victory' ? C.success : C.hpLow);
+      screen.flush();
+      await screen.waitEnter();
+      break;
+    }
 
     // Process each enemy turn with animation
     while (!isPlayerTurn(combat) && combat.status === 'active') {
@@ -518,6 +525,14 @@ export async function runCombatScene(
         render(enemyResult.events, false, enemyResult.blessingFired);
       }
       await screen.sleep(500);
+
+      if (combat.status !== 'active') {
+        render(enemyResult.events, false, enemyResult.blessingFired);
+        screen.text(L.pad, L.menuY + 1, combat.status === 'victory' ? '  All enemies defeated! Press ENTER.' : '  You have fallen. Press ENTER.', combat.status === 'victory' ? C.success : C.hpLow);
+        screen.flush();
+        await screen.waitEnter();
+        break;
+      }
     }
   }
 
