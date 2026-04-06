@@ -76,6 +76,21 @@ function cloneEntity(e: Entity): Entity {
   return JSON.parse(JSON.stringify(e));
 }
 
+/** Label entities with (A), (B) when there are duplicates */
+function labelEntities(entities: Entity[]): string[] {
+  const nameCounts: Record<string, number> = {};
+  for (const e of entities) nameCounts[e.name] = (nameCounts[e.name] ?? 0) + 1;
+  const nameIdx: Record<string, number> = {};
+  return entities.map((e) => {
+    if (nameCounts[e.name] > 1) {
+      nameIdx[e.name] = (nameIdx[e.name] ?? 0) + 1;
+      const letter = String.fromCharCode(64 + nameIdx[e.name]); // A, B, C...
+      return `${e.name} (${letter})`;
+    }
+    return e.name;
+  });
+}
+
 function formatEvent(ev: TurnEvent): string {
   const c =
     ev.type === 'damage' ? COLORS.hpLow :
@@ -118,10 +133,13 @@ async function runInterview(content: DailyContent): Promise<CharacterArchetype> 
 
   // Pick one question from each archetype (3 questions total)
   for (let i = 0; i < archetypes.length; i++) {
+    clearScreen();
+    printBlank();
+    print(header('W H O   A R E   Y O U ?'));
+    print(colorize(`  Question ${i + 1} of ${archetypes.length}`, COLORS.fgDim));
+    printBlank();
     const arch = archetypes[i];
     const q = arch.interviewQuestions[0];
-    printSep();
-    printBlank();
     print(colorize(`  ${q.question}`, COLORS.fg));
     printBlank();
     for (let j = 0; j < q.options.length; j++) {
@@ -247,6 +265,11 @@ async function runMapLoop(state: RunState): Promise<void> {
     printBlank();
     const frontierNodes = frontier.map((id) => content.map.nodes.find((n) => n.id === id)!).filter(Boolean);
 
+    const typeIcons: Record<string, string> = {
+      combat: '⚔ COMBAT — Enemies ahead', elite: '☠ ELITE — Dangerous foe, better rewards',
+      boss: '👑 BOSS — The final challenge', rest: '♥ REST — Recover HP and MP',
+      shop: '$ SHOP — Spend gold on supplies', event: '? EVENT — An encounter of fate',
+    };
     for (let i = 0; i < frontierNodes.length; i++) {
       const node = frontierNodes[i];
       const typeColor =
@@ -256,7 +279,7 @@ async function runMapLoop(state: RunState): Promise<void> {
         node.type === 'shop' ? COLORS.gold :
         node.type === 'event' ? COLORS.blessing :
         COLORS.fg;
-      print(`  ${colorize(`[${i + 1}]`, COLORS.selected)} ${colorize(node.type.toUpperCase(), typeColor, true)} ${colorize(`(Row ${node.row})`, COLORS.fgDim)}`);
+      print(`  ${colorize(`[${i + 1}]`, COLORS.selected)} ${colorize(typeIcons[node.type] ?? node.type.toUpperCase(), typeColor)}`);
     }
     printBlank();
 
@@ -280,6 +303,20 @@ async function handleNode(state: RunState, nodeId: string): Promise<boolean> {
       const encounter = content.encounters[nodeId];
       if (!encounter) return true;
       const enemies = encounter.enemies.map(cloneEntity);
+      // Encounter intro
+      clearScreen();
+      printBlank();
+      const names = [...new Set(enemies.map((e) => e.name))];
+      const counts = names.map((n) => {
+        const c = enemies.filter((e) => e.name === n).length;
+        return c > 1 ? `${c} ${n}s` : `a ${n}`;
+      });
+      const isElite = node.type === 'elite';
+      print(colorize(isElite ? '  ═══ ELITE ENCOUNTER ═══' : '  ═══ ENCOUNTER ═══', isElite ? COLORS.warning : COLORS.enemy, true));
+      printBlank();
+      print(colorize(`  ${counts.join(' and ')} ${enemies.length > 1 ? 'appear' : 'appears'}!`, COLORS.fg));
+      printBlank();
+      await pressEnter();
       const result = await runCombat(state, enemies, false);
       return result === 'victory';
     }
@@ -351,13 +388,13 @@ async function runCombat(
           },
         };
         const response = await adjudicate(req);
-        const events = applyAdjudication(combat, response, blessing.owner);
-        for (const ev of events) { logLines.push(ev.details); turnEvents.push(ev.details); }
+        applyAdjudication(combat, response, blessing.owner);
+        // Show only the narration (not mechanical "gains status" events — those are redundant)
         if (response.narration && !response.noEffect) {
           const prefix = blessing.owner === 'player' ? '☆' : '⚔';
           const line = `${prefix} ${response.narration}`;
           logLines.push(line);
-          turnEvents.push(colorize(line, COLORS.blessing));
+          turnEvents.push(line);
         }
         if (blessing.state.usedAbilities) {
           const used = blessing.state.usedAbilities as string[];
@@ -493,67 +530,73 @@ function renderCombatScreen(
   recentEvents: string[],
   showMenu: boolean,
 ): void {
+  const liveEnemies = combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0);
   const allEnemies = combat.entities.filter((e) => !e.isPlayer);
   const player = combat.entities.find((e) => e.isPlayer)!;
 
+  // Turn indicator
+  if (showMenu) {
+    print(colorize('  ═══ YOUR TURN ═══', COLORS.player, true));
+  } else {
+    print(colorize('  ═══ COMBAT ═══', COLORS.border));
+  }
   printBlank();
 
-  // Sprites
+  // Sprites — only show alive enemies
   const playerSprite = renderSprite('player', COLORS.player);
-  const enemySprites = allEnemies.map((e) =>
-    renderSprite(e.stats.hp <= 0 ? 'enemy' : e.name.includes('Colossus') || e.name.includes('Leviathan') ? 'boss' : 'enemy',
-      e.stats.hp <= 0 ? COLORS.fgDim : COLORS.enemy),
+  const enemySprites = liveEnemies.map((e) =>
+    renderSprite(e.name.includes('Colossus') || e.name.includes('Leviathan') ? 'boss' : 'enemy', COLORS.enemy),
   );
-  const maxHeight = Math.max(playerSprite.length, ...enemySprites.map((s) => s.length));
-  for (let row = 0; row < maxHeight; row++) {
-    const pLine = playerSprite[row] ?? ' '.repeat(10);
-    const eLines = enemySprites.map((s) => s[row] ?? ' '.repeat(8)).join(' ');
-    print(`${pLine}${'  '.repeat(4)}${eLines}`);
+  if (enemySprites.length > 0) {
+    const maxHeight = Math.max(playerSprite.length, ...enemySprites.map((s) => s.length));
+    for (let row = 0; row < maxHeight; row++) {
+      const pLine = playerSprite[row] ?? ' '.repeat(10);
+      const eLines = enemySprites.map((s) => s[row] ?? ' '.repeat(8)).join(' ');
+      print(`${pLine}${'  '.repeat(4)}${eLines}`);
+    }
   }
 
   printSep();
 
-  // Enemy status rows with descriptions
-  for (const e of allEnemies) {
+  // Enemy status rows — label with (A), (B) etc when multiple of same type
+  const enemyLabels = labelEntities(allEnemies);
+  for (let i = 0; i < allEnemies.length; i++) {
+    const e = allEnemies[i];
+    if (e.stats.hp <= 0) continue; // Hide dead enemies entirely
+    const label = enemyLabels[i];
     print(renderEntityRow(
-      e.name, Math.max(0, e.stats.hp), e.stats.maxHp, e.stats.mp, e.stats.maxMp,
-      e.level, e.statuses.map((s) => ({ name: s.name, type: s.type })),
+      label, e.stats.hp, e.stats.maxHp, e.stats.mp, e.stats.maxMp,
+      e.level, [], // Don't show abbreviated status names here
     ));
-    // Show status effect descriptions
+    // Show status effects with descriptions
     for (const s of e.statuses) {
       const desc = getStatusDesc(s.name);
-      if (desc) {
-        const c = s.type === 'buff' ? COLORS.success : COLORS.hpLow;
-        print(`    ${colorize(`${s.name}`, c)} ${colorize(`(${s.duration}t)`, COLORS.fgDim)} ${colorize(desc, COLORS.fgDim)}`);
-      }
+      const c = s.type === 'buff' ? COLORS.success : COLORS.hpLow;
+      print(`    ${colorize(s.name, c)} ${colorize(`(${s.duration}t)`, COLORS.fgDim)}${desc ? ` ${colorize(desc, COLORS.fgDim)}` : ''}`);
     }
   }
 
   printBlank();
 
-  // Player status row with descriptions
+  // Player status
   print(renderEntityRow(
     player.name, player.stats.hp, player.stats.maxHp, player.stats.mp, player.stats.maxMp,
-    player.level, player.statuses.map((s) => ({ name: s.name, type: s.type })),
+    player.level, [], // Don't show abbreviated names
     true,
   ));
   for (const s of player.statuses) {
     const desc = getStatusDesc(s.name);
-    if (desc) {
-      const c = s.type === 'buff' ? COLORS.success : COLORS.hpLow;
-      print(`    ${colorize(`${s.name}`, c)} ${colorize(`(${s.duration}t)`, COLORS.fgDim)} ${colorize(desc, COLORS.fgDim)}`);
-    }
+    const c = s.type === 'buff' ? COLORS.success : COLORS.hpLow;
+    print(`    ${colorize(s.name, c)} ${colorize(`(${s.duration}t)`, COLORS.fgDim)}${desc ? ` ${colorize(desc, COLORS.fgDim)}` : ''}`);
   }
 
   printBlank();
 
-  // Blessing — always show full text
+  // Blessing — always show
   const blessingData = state.content.blessings.player.find((b) => b.id === state.blessing.id);
-  print(`  ${colorize(`☆ ${state.blessing.name}`, COLORS.blessing)}`);
-  if (blessingData) print(`  ${colorize(blessingData.text, COLORS.fgDim)}`);
+  print(`  ${colorize(`☆ ${state.blessing.name}`, COLORS.blessing)} ${colorize(blessingData?.text ?? '', COLORS.fgDim)}`);
   if (combat.bossBlessing) {
-    print(`  ${colorize(`⚔ ${combat.bossBlessing.name}`, COLORS.enemy)}`);
-    print(`  ${colorize(state.content.blessings.boss.text, COLORS.fgDim)}`);
+    print(`  ${colorize(`⚔ ${combat.bossBlessing.name}`, COLORS.enemy)} ${colorize(state.content.blessings.boss.text, COLORS.fgDim)}`);
   }
 
   printBlank();
@@ -601,8 +644,9 @@ async function getPlayerAction(combat: CombatState, player: Entity): Promise<Pla
       if (enemies.length > 1) {
         printBlank();
         print(colorize('  Choose target:', COLORS.fg));
+        const labels = labelEntities(enemies);
         for (let i = 0; i < enemies.length; i++) {
-          print(`  ${colorize(`[${i + 1}]`, COLORS.selected)} ${enemies[i].name} (${enemies[i].stats.hp}/${enemies[i].stats.maxHp} HP)`);
+          print(`  ${colorize(`[${i + 1}]`, COLORS.selected)} ${labels[i]} (${enemies[i].stats.hp}/${enemies[i].stats.maxHp} HP)`);
         }
         const tChoice = await pickNumber('  > Target: ', enemies.length);
         const target = enemies[(tChoice || 1) - 1];
@@ -883,15 +927,20 @@ async function handleShopNode(state: RunState, nodeId: string): Promise<void> {
 async function showVictory(state: RunState): Promise<void> {
   clearScreen();
   printBlank();
-  print(header('R U N   C O M P L E T E'));
+  print(header('V I C T O R Y'));
   printBlank();
-  print(colorize('  The Ashen Colossus crumbles. Silence returns to the wastes.', COLORS.success));
+  print(colorize('  Against all odds, you prevailed.', COLORS.success, true));
+  print(colorize(`  The ${state.content.world.name} will remember your name.`, COLORS.success));
   printBlank();
   printSep();
-  print(`  ${colorize('Character:', COLORS.fg)} ${state.player.name} Lv${state.player.level}`);
-  print(`  ${colorize('Blessing:', COLORS.blessing)} ${state.blessing.name}`);
-  print(`  ${colorize('Gold:', COLORS.gold)} ${state.gold}`);
-  print(`  ${colorize('Nodes visited:', COLORS.info)} ${state.visitedNodeIds.length}`);
+  print(colorize('  ─── Run Summary ───', COLORS.title));
+  printBlank();
+  print(`  ${colorize('Character:', COLORS.fgDim)}  ${colorize(state.player.name, COLORS.player, true)} Lv${state.player.level}`);
+  print(`  ${colorize('Blessing:', COLORS.fgDim)}   ${colorize(state.blessing.name, COLORS.blessing)}`);
+  print(`  ${colorize('Final HP:', COLORS.fgDim)}   ${colorize(`${state.player.stats.hp}/${state.player.stats.maxHp}`, COLORS.hp)}`);
+  print(`  ${colorize('Gold:', COLORS.fgDim)}       ${colorize(String(state.gold), COLORS.gold)}`);
+  print(`  ${colorize('Battles:', COLORS.fgDim)}    ${state.visitedNodeIds.length} nodes traversed`);
+  print(`  ${colorize('Abilities:', COLORS.fgDim)}  ${state.player.abilities.map((a) => a.name).join(', ')}`);
   printSep();
   printBlank();
   await pressEnter('Press Enter to exit...');

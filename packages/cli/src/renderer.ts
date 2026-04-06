@@ -236,14 +236,14 @@ export function renderAbilityMenu(
     const cdStr = (a.cooldown && a.cooldown > 0) ? ` ${fg(COLORS.warning)}[CD:${a.cooldown}]${RESET}` : '';
     const costStr = `${fg(COLORS.mp)}${a.mpCost}MP${RESET}`;
     lines.push(
-      `  ${fg(keyColor)}[${i + 1}]${RESET} ${fg(color)}${a.name.padEnd(22)}${RESET} ${costStr}${lockedStr}${cdStr}  ${fg(COLORS.fgDim)}${a.description.slice(0, 32)}${RESET}`,
+      `  ${fg(keyColor)}[${i + 1}]${RESET} ${fg(color)}${a.name.padEnd(22)}${RESET} ${costStr}${lockedStr}${cdStr}  ${fg(COLORS.fgDim)}${a.description}${RESET}`,
     );
   }
 
   const offset = abilities.length;
   if (includeDefend) {
     lines.push(
-      `  ${fg(COLORS.selected)}[${offset + 1}]${RESET} ${fg(COLORS.fg)}Defend                  ${RESET} ${fg(COLORS.mp)}0MP${RESET}  ${fg(COLORS.fgDim)}Restore 5 MP, reduce incoming damage${RESET}`,
+      `  ${fg(COLORS.selected)}[${offset + 1}]${RESET} ${fg(COLORS.fg)}Defend                  ${RESET} ${fg(COLORS.mp)}0MP${RESET}  ${fg(COLORS.fgDim)}Restore 8 MP + 5 HP, reduce damage${RESET}`,
     );
   }
   if (includeItems) {
