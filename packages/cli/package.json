@@ -3,13 +3,15 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "play": "tsx src/index.ts",
+    "play": "tsx src/play-tui.ts",
+    "play:classic": "tsx src/index.ts",
     "simulate": "tsx src/simulate.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@manyworlds/engine": "*",
-    "@manyworlds/shared": "*"
+    "@manyworlds/shared": "*",
+    "terminal-kit": "^3.1.2"
   },
   "devDependencies": {
     "@types/node": "^20.14.2",
