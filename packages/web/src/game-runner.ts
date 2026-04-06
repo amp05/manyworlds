@@ -24,7 +24,11 @@ import { applyScanlines } from '../../cli/src/tui/animation.js';
 import { C } from '../../cli/src/tui/colors.js';
 
 import type { WebScreen } from './xterm-screen.js';
-import { fetchDailyContent, adjudicate as apiAdjudicate } from './api/client.js';
+import { adjudicate as apiAdjudicate } from './api/client.js';
+
+// Import stubs directly so the game works as a static site (no server needed)
+import { buildStubDailyContent } from '../../server/src/stubs/daily-content.js';
+import { adjudicate as mockAdjudicate } from '../../server/src/llm/adjudicator.js';
 
 function cloneEntity(e: Entity): Entity {
   return JSON.parse(JSON.stringify(e));
@@ -40,23 +44,18 @@ function makeBlessingRuntime(b: Blessing, owner: 'player' | 'boss'): BlessingRun
 }
 
 export async function runWebGame(screen: WebScreen): Promise<void> {
-  // Fetch daily content from the server
-  let content: DailyContent;
-  try {
-    content = await fetchDailyContent();
-  } catch {
-    screen.clear();
-    screen.centerText(10, 'Failed to load game content.', '#ef4444');
-    screen.centerText(12, 'Make sure the server is running: npm run dev:server', '#a8a29e');
-    screen.flush();
-    return;
-  }
-
+  // Use embedded stubs (works offline / static deploy)
+  // Try the live API for adjudication, fall back to mock
+  const content: DailyContent = buildStubDailyContent();
   const rng = new SeededRNG(content.seed);
 
-  // The adjudicate function wraps the API call
   async function adjudicateWrapper(req: AdjudicationRequest): Promise<AdjudicationResponse> {
-    return apiAdjudicate(req);
+    try {
+      return await apiAdjudicate(req);
+    } catch {
+      // Server not available — use mock adjudicator
+      return mockAdjudicate(req);
+    }
   }
 
   // Title
