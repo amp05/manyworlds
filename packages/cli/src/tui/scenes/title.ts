@@ -6,11 +6,13 @@ import type { IScreen } from '../screen-interface.js';
 import { C } from '../colors.js';
 import { typewrite, fadeInText, wipeTransition, applyScanlines } from '../animation.js';
 
+// Compact block title — fits in 24-row terminals
 const TITLE_ART = [
-  '  __  __   _   _  ___   __        _____  ___  _    ___  ___ ',
-  ' |  \\/  | /_\\ | \\| \\ \\ / / \\    / / _ \\| _ \\| |  |   \\/ __|',
-  ' | |\\/| |/ _ \\| .` |\\ V /   \\/\\/ / (_) |   /| |__| |) \\__ \\',
-  ' |_|  |_/_/ \\_\\_|\\_| |_|     \\_/ \\___/|_|_\\|____|___/|___/',
+  '  ███╗   ███╗ █████╗ ███╗  ██╗██╗   ██╗',
+  '  ████╗ ████║██╔══██╗████╗ ██║╚██╗ ██╔╝',
+  '  ██╔████╔██║███████║██╔██╗██║ ╚████╔╝ ',
+  '  ██║╚██╔╝██║██╔══██║██║╚████║  ╚██╔╝  ',
+  '  ╚═╝ ╚═╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚══╝   ╚═╝  ',
 ];
 
 export async function showTitleScene(screen: IScreen, content: DailyContent): Promise<void> {
@@ -19,7 +21,8 @@ export async function showTitleScene(screen: IScreen, content: DailyContent): Pr
   // Draw border frame
   screen.box(0, 0, screen.width, screen.height, C.border);
 
-  const centerY = Math.floor(screen.height / 2) - 5;
+  const artH = TITLE_ART.length;
+  const centerY = Math.max(2, Math.floor(screen.height / 2) - artH - 3);
 
   // Animate title art
   for (let i = 0; i < TITLE_ART.length; i++) {
@@ -28,13 +31,18 @@ export async function showTitleScene(screen: IScreen, content: DailyContent): Pr
   }
   await screen.sleep(300);
 
+  // "WORLDS" as spaced text below the block art
+  screen.centerText(centerY + artH + 1, 'W  O  R  L  D  S', C.title, C.bg, true);
+  screen.flush();
+  await screen.sleep(200);
+
   // Subtitle
-  screen.centerText(centerY + 5, 'D A I L Y   R O G U E L I K E   R P G', C.dim);
+  screen.centerText(centerY + artH + 3, 'D A I L Y   R O G U E L I K E   R P G', C.dim);
   screen.flush();
   await screen.sleep(200);
 
   // World info
-  const infoY = centerY + 8;
+  const infoY = centerY + artH + 5;
   await fadeInText(screen, Math.floor((screen.width - content.world.name.length - 8) / 2),
     infoY, `World: ${content.world.name}`, C.title);
 
