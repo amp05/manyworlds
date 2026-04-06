@@ -357,10 +357,37 @@ export async function runCombatScene(
       }
     }
 
-    // ── Combat log (fills space between blessing and menu) ──
+    // ── Turn order + round indicator ──
     screen.hline(L.pad, y, L.w - L.pad * 2, '─', C.border);
+    screen.text(L.pad + 1, y, ` Round ${combat.turnNumber} `, C.title, C.bg, true);
+    y += 1;
+    // Show turn order: who acts in what sequence this round
+    const liveEntities = combat.turnOrder
+      .map((id) => combat.entities.find((en) => en.id === id))
+      .filter((e): e is Entity => !!e && e.stats.hp > 0);
+    const orderLabels = labelEntities(liveEntities);
     const currentEntity = getCurrentEntity(combat);
-    screen.text(L.pad + 1, y, ` Turn ${combat.turnNumber} -- ${currentEntity?.name ?? ''} `, C.dim, C.bg);
+    let x = L.pad;
+    screen.text(x, y, 'Order: ', C.dim);
+    x += 7;
+    for (let i = 0; i < liveEntities.length; i++) {
+      const e = liveEntities[i];
+      const isCurrent = e.id === currentEntity?.id;
+      const label = orderLabels[i];
+      if (isCurrent) {
+        screen.text(x, y, `[${label}]`, e.isPlayer ? C.player : C.enemy, C.bg, true);
+        x += label.length + 3;
+      } else {
+        screen.text(x, y, label, C.dim);
+        x += label.length + 1;
+      }
+      if (i < liveEntities.length - 1) {
+        screen.text(x, y, '>', C.border);
+        x += 2;
+      }
+    }
+    y += 1;
+    screen.hline(L.pad, y, L.w - L.pad * 2, '─', C.border);
     y += 1;
     const logSpace = L.menuY - y - 1;
     const eventsToShow = turnEvents.length > 0 ? turnEvents : logLines;

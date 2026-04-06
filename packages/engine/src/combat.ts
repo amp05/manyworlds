@@ -149,7 +149,7 @@ export function initCombat(
     entities,
     turnOrder: sortBySpeed(entities),
     currentTurnIndex: 0,
-    turnNumber: 0,
+    turnNumber: 1,
     playerBlessing,
     bossBlessing,
     log: [],
@@ -186,6 +186,21 @@ export function processTurn(
   }
 
   const isPlayer = currentEntity.isPlayer === true;
+
+  // At the start of a new round (first entity acting), check EVERY_N_TURNS
+  if (state.currentTurnIndex === 0) {
+    const blessings = [state.playerBlessing, state.bossBlessing].filter(Boolean) as BlessingRuntime[];
+    for (const b of blessings) {
+      if (b.triggers.includes('EVERY_N_TURNS') && b.blessingParams.nTurns) {
+        if (state.turnNumber % b.blessingParams.nTurns === 0) {
+          state.pendingTriggers.push({
+            trigger: 'EVERY_N_TURNS',
+            turnNumber: state.turnNumber,
+          });
+        }
+      }
+    }
+  }
 
   // Emit TURN_START
   emitTrigger(state, 'TURN_START', { sourceEntityId: currentEntityId });
@@ -401,21 +416,9 @@ export function processTurn(
 function advanceTurn(state: CombatState, rng: SeededRNG): void {
   state.currentTurnIndex = (state.currentTurnIndex + 1) % state.turnOrder.length;
 
-  // When we've completed a full round, increment turn number
+  // When we've completed a full round, increment round number and re-sort by speed
   if (state.currentTurnIndex === 0) {
     state.turnNumber += 1;
-    // Check EVERY_N_TURNS for active blessings
-    const blessings = [state.playerBlessing, state.bossBlessing].filter(Boolean) as BlessingRuntime[];
-    for (const b of blessings) {
-      if (b.triggers.includes('EVERY_N_TURNS') && b.blessingParams.nTurns) {
-        if (state.turnNumber % b.blessingParams.nTurns === 0) {
-          state.pendingTriggers.push({
-            trigger: 'EVERY_N_TURNS',
-            turnNumber: state.turnNumber,
-          });
-        }
-      }
-    }
     // Re-sort turn order (speeds may have changed from status effects)
     state.turnOrder = sortBySpeed(state.entities.filter((e) => e.stats.hp > 0));
   }
