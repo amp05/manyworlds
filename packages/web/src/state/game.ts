@@ -108,7 +108,7 @@ async function handleBlessingTriggers(
         applyAdjudication(combat, response, blessing.owner);
         // Show only narration (not mechanical "gains status" events — redundant)
         if (response.narration && !response.noEffect) {
-          const prefix = blessing.owner === 'player' ? '☆' : '⚔';
+          const prefix = blessing.owner === 'player' ? '*' : 'x';
           log.push(`${prefix} ${response.narration}`);
         }
 

@@ -249,7 +249,7 @@ async function runMapLoop(state: RunState): Promise<void> {
     for (const nid of state.visitedNodeIds) {
       const node = content.map.nodes.find((n) => n.id === nid);
       if (node) {
-        print(colorize(`    ✓ Row ${node.row}: ${node.type.toUpperCase()}`, COLORS.fgDim));
+        print(colorize(`    > Row ${node.row}: ${node.type.toUpperCase()}`, COLORS.fgDim));
       }
     }
     printBlank();
@@ -266,8 +266,8 @@ async function runMapLoop(state: RunState): Promise<void> {
     const frontierNodes = frontier.map((id) => content.map.nodes.find((n) => n.id === id)!).filter(Boolean);
 
     const typeIcons: Record<string, string> = {
-      combat: '⚔ COMBAT — Enemies ahead', elite: '☠ ELITE — Dangerous foe, better rewards',
-      boss: '👑 BOSS — The final challenge', rest: '♥ REST — Recover HP and MP',
+      combat: 'x COMBAT — Enemies ahead', elite: '! ELITE — Dangerous foe, better rewards',
+      boss: '# BOSS — The final challenge', rest: '+ REST — Recover HP and MP',
       shop: '$ SHOP — Spend gold on supplies', event: '? EVENT — An encounter of fate',
     };
     for (let i = 0; i < frontierNodes.length; i++) {
@@ -391,7 +391,7 @@ async function runCombat(
         applyAdjudication(combat, response, blessing.owner);
         // Show only the narration (not mechanical "gains status" events — those are redundant)
         if (response.narration && !response.noEffect) {
-          const prefix = blessing.owner === 'player' ? '☆' : '⚔';
+          const prefix = blessing.owner === 'player' ? '*' : 'x';
           const line = `${prefix} ${response.narration}`;
           logLines.push(line);
           turnEvents.push(line);
@@ -594,9 +594,9 @@ function renderCombatScreen(
 
   // Blessing — always show
   const blessingData = state.content.blessings.player.find((b) => b.id === state.blessing.id);
-  print(`  ${colorize(`☆ ${state.blessing.name}`, COLORS.blessing)} ${colorize(blessingData?.text ?? '', COLORS.fgDim)}`);
+  print(`  ${colorize(`* ${state.blessing.name}`, COLORS.blessing)} ${colorize(blessingData?.text ?? '', COLORS.fgDim)}`);
   if (combat.bossBlessing) {
-    print(`  ${colorize(`⚔ ${combat.bossBlessing.name}`, COLORS.enemy)} ${colorize(state.content.blessings.boss.text, COLORS.fgDim)}`);
+    print(`  ${colorize(`x ${combat.bossBlessing.name}`, COLORS.enemy)} ${colorize(state.content.blessings.boss.text, COLORS.fgDim)}`);
   }
 
   printBlank();
@@ -706,7 +706,7 @@ async function handleBlessingTriggers(
       const events = applyAdjudication(combat, response, 'player');
       for (const ev of events) logLines.push(ev.details);
       if (response.narration && !response.noEffect) {
-        logLines.push(colorize(`☆ ${response.narration}`, COLORS.blessing));
+        logLines.push(colorize(`* ${response.narration}`, COLORS.blessing));
       }
 
       // Handle Weight of Choice: lock abilities tracked in blessing state
@@ -739,7 +739,7 @@ async function handleBlessingTriggers(
       const events = applyAdjudication(combat, response, 'boss');
       for (const ev of events) logLines.push(ev.details);
       if (response.narration && !response.noEffect) {
-        logLines.push(colorize(`⚔ ${response.narration}`, COLORS.enemy));
+        logLines.push(colorize(`x ${response.narration}`, COLORS.enemy));
       }
     }
   }

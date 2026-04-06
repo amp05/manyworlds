@@ -209,7 +209,7 @@ function stripAnsi(str: string): string {
 }
 
 export function renderBlessingBanner(blessingName: string, flavor: string): string {
-  return `  ${fg(COLORS.blessing)}☆ ${BOLD}${blessingName}${RESET}  ${fg(COLORS.fgDim)}"${flavor}"${RESET}`;
+  return `  ${fg(COLORS.blessing)}* ${BOLD}${blessingName}${RESET}  ${fg(COLORS.fgDim)}"${flavor}"${RESET}`;
 }
 
 export function renderCombatLog(entries: string[], maxLines = 6): string {

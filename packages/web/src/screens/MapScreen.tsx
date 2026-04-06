@@ -20,7 +20,7 @@ export function MapScreen() {
 {'  '}<Span color={C.dim}>HP </Span><Bar current={player.stats.hp} max={player.stats.maxHp} width={16} />{'\n'}
 {'  '}<Span color={C.dim}>MP </Span><Bar current={player.stats.mp} max={player.stats.maxMp} width={16} type="mp" />{'\n'}
 {'  '}<Span color={C.gold}>Gold: {gold}</Span>{'  '}<Span color={C.info}>EXP: {player.exp}</Span>{'\n'}
-{'  '}<Span color={C.blessing}>☆ {blessing?.name}</Span>{'\n'}
+{'  '}<Span color={C.blessing}>* {blessing?.name}</Span>{'\n'}
 {'\n'}
       </pre>
 

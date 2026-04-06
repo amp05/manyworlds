@@ -98,18 +98,7 @@ pre.term-block,
   align-items: flex-end;
 }
 
-/* ── Map graph ───────────────────────────────── */
-
-.map-graph-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 0.5em 0;
-}
-
-.map-graph-container svg {
-  max-width: 100%;
-}
+/* ── Map graph (no longer SVG — rendered in pre block) ── */
 
 .map-legend {
   display: flex;

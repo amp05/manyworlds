@@ -126,7 +126,7 @@ export function LevelUpScreen() {
     return (
       <div className="screen">
         <pre className="term-block">
-<Span color={C.success} bold>{'  ★ Level {player.level} reached!'}</Span>{'\n'}
+<Span color={C.success} bold>{'  >> Level {player.level} reached!'}</Span>{'\n'}
         </pre>
         <pre className="term-block"><Option index={1} label="Continue" onClick={returnToMap} /></pre>
       </div>

@@ -1,4 +1,5 @@
 import type { FloorMap, MapNode } from '@manyworlds/shared';
+import { Span, C } from './Terminal.js';
 
 interface MapGraphProps {
   map: FloorMap;
@@ -7,25 +8,29 @@ interface MapGraphProps {
   onSelectNode: (nodeId: string) => void;
 }
 
-const NODE_COLORS: Record<string, string> = {
-  combat: '#d4c5a9',
-  elite: '#ffaa44',
-  boss: '#ff4444',
-  rest: '#44ff88',
-  shop: '#ffcc44',
-  event: '#cc88ff',
+const NODE_LABELS: Record<string, string> = {
+  combat: 'COMBAT',
+  elite: 'ELITE!',
+  boss: '-BOSS-',
+  rest: ' REST ',
+  shop: ' SHOP ',
+  event: 'EVENT?',
 };
 
-const NODE_ICONS: Record<string, string> = {
-  combat: '⚔',
-  elite: '☠',
-  boss: '👑',
-  rest: '♥',
-  shop: '$',
-  event: '?',
+const NODE_COLORS: Record<string, string> = {
+  combat: C.fg,
+  elite: C.warning,
+  boss: C.hpLow,
+  rest: C.success,
+  shop: C.gold,
+  event: C.blessing,
 };
 
 export function MapGraph({ map, visitedNodeIds, frontierNodeIds, onSelectNode }: MapGraphProps) {
+  const visited = new Set(visitedNodeIds);
+  const frontier = new Set(frontierNodeIds);
+  const currentNodeId = visitedNodeIds[visitedNodeIds.length - 1];
+
   // Group nodes by row
   const rowMap = new Map<number, MapNode[]>();
   for (const node of map.nodes) {
@@ -33,136 +38,140 @@ export function MapGraph({ map, visitedNodeIds, frontierNodeIds, onSelectNode }:
     row.push(node);
     rowMap.set(node.row, row);
   }
-  const rows = [...rowMap.entries()].sort((a, b) => b[0] - a[0]); // top = highest row (boss)
+  const rows = [...rowMap.entries()].sort((a, b) => b[0] - a[0]); // top = boss
 
-  const maxCols = Math.max(...[...rowMap.values()].map((r) => r.length));
-  const svgWidth = Math.max(320, maxCols * 80 + 40);
-  const svgHeight = rows.length * 64 + 40;
-  const rowSpacing = 64;
-  const yOffset = 30;
-
-  // Calculate positions
-  const positions: Record<string, { x: number; y: number }> = {};
-  for (const [rowIdx, rowNodes] of rows) {
-    const maxRow = rows[0][0];
-    const y = (maxRow - rowIdx) * rowSpacing + yOffset;
-    const spacing = svgWidth / (rowNodes.length + 1);
-    rowNodes.forEach((node, i) => {
-      positions[node.id] = { x: spacing * (i + 1), y };
-    });
+  // Build edge lookup: for each node, which nodes in the next row does it connect to?
+  const edgesFrom = new Map<string, Set<string>>();
+  for (const [from, to] of map.edges) {
+    const s = edgesFrom.get(from) ?? new Set();
+    s.add(to);
+    edgesFrom.set(from, s);
   }
 
-  const visited = new Set(visitedNodeIds);
-  const frontier = new Set(frontierNodeIds);
-  const currentNodeId = visitedNodeIds[visitedNodeIds.length - 1];
+  // Render each row as a line of ASCII nodes with connections
+  const maxCols = Math.max(...[...rowMap.values()].map((r) => r.length));
+  const cellWidth = 10; // chars per node cell
 
   return (
-    <div className="map-graph-container">
-      <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
-        {/* Connection lines */}
-        {map.edges.map(([fromId, toId], i) => {
-          const from = positions[fromId];
-          const to = positions[toId];
-          if (!from || !to) return null;
-          const isWalked = visited.has(fromId) && visited.has(toId);
-          return (
-            <line
-              key={i}
-              x1={from.x} y1={from.y}
-              x2={to.x} y2={to.y}
-              stroke={isWalked ? '#5a5070' : '#2a2030'}
-              strokeWidth={isWalked ? 2 : 1}
-              strokeDasharray={isWalked ? undefined : '4 3'}
-            />
-          );
-        })}
+    <pre className="term-block" style={{ lineHeight: '1.3' }}>
+      {rows.map(([rowIdx, rowNodes], ri) => {
+        // Pad to center nodes
+        const padding = Math.floor((maxCols - rowNodes.length) / 2) * cellWidth;
+        const padStr = ' '.repeat(Math.max(0, padding));
 
-        {/* Nodes */}
-        {map.nodes.map((node) => {
-          const pos = positions[node.id];
-          if (!pos) return null;
+        // Render the node line
+        const nodeLine = rowNodes.map((node) => {
           const isVisited = visited.has(node.id);
           const isFrontier = frontier.has(node.id);
           const isCurrent = node.id === currentNodeId;
-          const color = NODE_COLORS[node.type] ?? '#d4c5a9';
-          const icon = NODE_ICONS[node.type] ?? '?';
+          const label = NODE_LABELS[node.type] ?? node.type.toUpperCase();
+          const color = NODE_COLORS[node.type] ?? C.fg;
 
-          const r = node.type === 'boss' ? 22 : 18;
-
-          return (
-            <g
-              key={node.id}
-              onClick={() => isFrontier && onSelectNode(node.id)}
-              style={{ cursor: isFrontier ? 'pointer' : 'default' }}
-            >
-              {/* Glow for frontier nodes */}
-              {isFrontier && (
-                <circle
-                  cx={pos.x} cy={pos.y} r={r + 4}
-                  fill="none" stroke={color} strokeWidth={1}
-                  opacity={0.4}
-                >
-                  <animate attributeName="r" values={`${r + 2};${r + 6};${r + 2}`}
-                    dur="2s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.4;0.1;0.4"
-                    dur="2s" repeatCount="indefinite" />
-                </circle>
-              )}
-
-              {/* Current position indicator */}
-              {isCurrent && (
-                <circle cx={pos.x} cy={pos.y} r={r + 6}
-                  fill="none" stroke="#44ddff" strokeWidth={2} opacity={0.6}>
-                  <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1.5s" repeatCount="indefinite" />
-                </circle>
-              )}
-
-              {/* Node circle */}
-              <circle
-                cx={pos.x} cy={pos.y} r={r}
-                fill={isCurrent ? '#1a2a3a' : isVisited ? '#1a1a2e' : isFrontier ? '#1a1030' : '#12121a'}
-                stroke={isCurrent ? '#44ddff' : isFrontier ? '#ff9944' : isVisited ? '#4a4060' : color}
-                strokeWidth={isCurrent ? 2.5 : isFrontier ? 2.5 : 1.5}
-                opacity={isVisited && !isFrontier && !isCurrent ? 0.5 : 1}
-              />
-
-              {/* Icon */}
-              <text
-                x={pos.x} y={pos.y + 5}
-                fill={isVisited ? '#6a6a6a' : color}
-                textAnchor="middle"
-                fontSize={node.type === 'boss' ? 16 : 14}
-                fontFamily="monospace"
+          if (isCurrent) {
+            // Current position: bright highlighted box
+            return (
+              <span key={node.id}>
+                <Span color={C.player} bold>{'['}{label}{']'}</Span>
+                {'  '}
+              </span>
+            );
+          } else if (isFrontier) {
+            // Clickable frontier node
+            return (
+              <span
+                key={node.id}
+                className="term-option"
+                style={{ cursor: 'pointer', display: 'inline' }}
+                onClick={() => onSelectNode(node.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') onSelectNode(node.id); }}
               >
-                {icon}
-              </text>
+                <Span color={color} bold>{'['}{label}{']'}</Span>
+                {'  '}
+              </span>
+            );
+          } else if (isVisited) {
+            return (
+              <span key={node.id}>
+                <Span color={C.dim}>{' '}{label}{' '}</Span>
+                {'  '}
+              </span>
+            );
+          } else {
+            return (
+              <span key={node.id}>
+                <Span color={C.border}>{' '}{label}{' '}</Span>
+                {'  '}
+              </span>
+            );
+          }
+        });
 
-              {/* Label below for frontier/boss */}
-              {(isFrontier || node.type === 'boss') && (
-                <text
-                  x={pos.x} y={pos.y + r + 14}
-                  fill={isFrontier ? '#d4c5a9' : '#7a6a5a'}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fontFamily="monospace"
-                >
-                  {node.type.toUpperCase()}
-                </text>
-              )}
-            </g>
+        // Render connection lines to the next row (below this one, since we render top-down)
+        const nextRow = ri < rows.length - 1 ? rows[ri + 1] : null;
+        let connLine: React.ReactNode = null;
+        if (nextRow) {
+          const [, nextNodes] = nextRow;
+          const nextPadding = Math.floor((maxCols - nextNodes.length) / 2) * cellWidth;
+
+          // Simple connection: draw | under each node that connects down
+          const connChars: string[] = [];
+          const lineWidth = Math.max(maxCols * cellWidth, 40);
+          for (let c = 0; c < lineWidth; c++) connChars.push(' ');
+
+          for (const node of rowNodes) {
+            const nodeCol = rowNodes.indexOf(node);
+            const nodeCenter = padding + nodeCol * cellWidth + 4;
+            const targets = edgesFrom.get(node.id);
+            if (!targets) continue;
+
+            for (const targetId of targets) {
+              const targetNode = nextNodes.find((n) => n.id === targetId);
+              if (!targetNode) continue;
+              const targetCol = nextNodes.indexOf(targetNode);
+              const targetCenter = nextPadding + targetCol * cellWidth + 4;
+
+              if (nodeCenter === targetCenter) {
+                connChars[nodeCenter] = '|';
+              } else if (nodeCenter < targetCenter) {
+                connChars[nodeCenter] = '\\';
+                for (let c = nodeCenter + 1; c < targetCenter; c++) {
+                  if (connChars[c] === ' ') connChars[c] = '-';
+                }
+              } else {
+                connChars[targetCenter] = '/';
+                for (let c = targetCenter + 1; c < nodeCenter; c++) {
+                  if (connChars[c] === ' ') connChars[c] = '-';
+                }
+              }
+            }
+          }
+          const isWalked = rowNodes.some((n) => visited.has(n.id));
+          connLine = (
+            <Span color={isWalked ? C.dim : C.border}>
+              {connChars.join('').trimEnd()}
+            </Span>
           );
-        })}
-      </svg>
+        }
 
-      {/* Legend */}
-      <div className="map-legend">
-        {Object.entries(NODE_ICONS).map(([type, icon]) => (
-          <span key={type} className="legend-item">
-            <span style={{ color: NODE_COLORS[type] }}>{icon}</span>
-            <span className="dim"> {type} </span>
+        return (
+          <span key={rowIdx}>
+            {padStr}{nodeLine}{'\n'}
+            {connLine && <>{connLine}{'\n'}</>}
           </span>
-        ))}
-      </div>
-    </div>
+        );
+      })}
+      {'\n'}
+      <Span color={C.dim}>{'  Click a highlighted node to proceed.'}</Span>{'\n'}
+      {'\n'}
+      <Span color={C.dim}>{'  '}</Span>
+      <Span color={C.fg}>COMBAT</Span>{'  '}
+      <Span color={C.warning}>ELITE!</Span>{'  '}
+      <Span color={C.success}> REST </Span>{'  '}
+      <Span color={C.gold}> SHOP </Span>{'  '}
+      <Span color={C.blessing}>EVENT?</Span>{'  '}
+      <Span color={C.hpLow}>-BOSS-</Span>{'\n'}
+    </pre>
   );
 }

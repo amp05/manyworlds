@@ -153,7 +153,7 @@ async function main() {
           if (choices && !player.abilities.some((a) => choices.abilities.some((ca) => ca.id === a.id))) {
             const pick = choices.abilities.find((a) => a.effect.type === 'damage' || a.effect.type === 'drain' || a.effect.type === 'composite') ?? choices.abilities[0];
             player.abilities.push({ ...pick });
-            log(`  ★ Level ${player.level}! Learned ${pick.name}`);
+            log(`  >> Level ${player.level}! Learned ${pick.name}`);
           }
         }
         log(`+${expGained} EXP, +${goldGained} Gold  |  HP: ${player.stats.hp}/${player.stats.maxHp}  MP: ${player.stats.mp}/${player.stats.maxMp}`);

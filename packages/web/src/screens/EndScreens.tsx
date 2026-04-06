@@ -56,7 +56,7 @@ export function BossIntroScreen() {
 <Span color={C.fg}>  {content.bossEncounter.introText}</Span>{'\n'}
 {'\n'}
 <Sep />
-<Span color={C.enemy}>  ⚔ {bossBlessing.name}</Span>{'\n'}
+<Span color={C.enemy}>  x {bossBlessing.name}</Span>{'\n'}
 <Span color={C.dim}>  "{bossBlessing.flavor}"</Span>{'\n'}
 <Span color={C.dim}>  {bossBlessing.text}</Span>{'\n'}
 {'\n'}

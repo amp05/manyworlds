@@ -65,7 +65,7 @@ export function CombatScreen() {
 {'\n'}
 {'  '}<Span color={C.info}>+{combatRewards.exp} EXP</Span>{'   '}<Span color={C.gold}>+{combatRewards.gold} Gold</Span>{'\n'}
 {'  '}<Span color={C.dim}>HP: {playerEntity.stats.hp}/{playerEntity.stats.maxHp}</Span>{'\n'}
-{pendingLevelUp && <><Span color={C.blessing}>{'\n  ★ LEVEL UP! Choose a new ability.'}</Span>{'\n'}</>}
+{pendingLevelUp && <><Span color={C.blessing}>{'\n  >> LEVEL UP! Choose a new ability.'}</Span>{'\n'}</>}
 {'\n'}
           </pre>
           <pre className="term-block">
@@ -184,9 +184,9 @@ export function CombatScreen() {
 
       {/* ── Blessing details (always visible) ── */}
       <pre className="term-block">
-{'  '}<Span color={C.blessing}>☆ {blessing?.name}</Span>{' '}<Span color={C.dim}>{content?.blessings.player.find((b) => b.id === blessing?.id)?.text ?? ''}</Span>{'\n'}
+{'  '}<Span color={C.blessing}>* {blessing?.name}</Span>{' '}<Span color={C.dim}>{content?.blessings.player.find((b) => b.id === blessing?.id)?.text ?? ''}</Span>{'\n'}
 {combat.bossBlessing && <>
-{'  '}<Span color={C.enemy}>⚔ {combat.bossBlessing.name}</Span>{' '}<Span color={C.dim}>{content?.blessings.boss.text ?? ''}</Span>{'\n'}
+{'  '}<Span color={C.enemy}>x {combat.bossBlessing.name}</Span>{' '}<Span color={C.dim}>{content?.blessings.boss.text ?? ''}</Span>{'\n'}
 </>}
       </pre>
 
@@ -196,7 +196,7 @@ export function CombatScreen() {
           if (line === '───') return <div key={i} className="combat-log-separator" />;
           const cls = line.includes('damage') || line.includes('defeated') || line.includes('deals') ? 'damage'
             : line.includes('recover') || line.includes('heal') || line.includes('Regen') ? 'success'
-            : line.includes('☆') || line.includes('⚔') || line.includes('undertow') || line.includes('tide') || line.includes('abyss') || line.includes('Blessing') ? 'blessing-text'
+            : line.startsWith('* ') || line.startsWith('x ') || line.includes('undertow') || line.includes('tide') || line.includes('abyss') || line.includes('Blessing') ? 'blessing-text'
             : line.includes('gains') || line.includes('fades') ? 'dim'
             : '';
           return <div key={i} className={`combat-log-entry ${cls}`}>{'  > '}{line}</div>;
@@ -229,7 +229,7 @@ export function CombatScreen() {
       {processingTurn && (
         <pre className="term-block">
           <span className="processing-indicator">
-            <span className="processing-dot">●</span>{' '}<Span color={C.blessing}>Processing turn...</Span>
+            <span className="processing-dot">.</span>{' '}<Span color={C.blessing}>Processing turn...</Span>
           </span>
         </pre>
       )}
