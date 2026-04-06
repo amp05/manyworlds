@@ -317,42 +317,43 @@ export function buildStubDailyContent(date?: Date): DailyContent {
     };
   }
 
-  for (const node of eventNodes) {
-    events[node.id] = {
-      nodeId: node.id,
+  const ashenEvents = [
+    {
       narrative: 'You find a crumbling shrine half-buried in ash. A faint warmth emanates from within.',
       choices: [
-        {
-          text: 'Offer your blood to the shrine.',
-          outcome: {
-            narrative: 'The shrine pulses. You feel stronger, but weaker.',
-            rewards: { statBoost: { attack: 3 } },
-            penalties: { hpLoss: 15 },
-          },
-        },
-        {
-          text: 'Search for offerings left behind.',
-          outcome: {
-            narrative: 'You find a tarnished vial — a health potion, half-full.',
-            rewards: {
-              item: {
-                id: 'shrine_potion',
-                name: 'Ash Vial',
-                description: 'A potion found in a crumbling shrine.',
-                type: 'consumable',
-                effect: { type: 'heal', base: 25, target: 'self' },
-                quantity: 1,
-                value: 0,
-              },
-            },
-          },
-        },
-        {
-          text: 'Leave it undisturbed.',
-          outcome: { narrative: 'You walk away. Some doors should stay closed.', rewards: { gold: 5 } },
-        },
+        { text: 'Offer your blood to the shrine.', outcome: { narrative: 'The shrine pulses. You feel stronger, but weaker.', rewards: { statBoost: { attack: 3 } }, penalties: { hpLoss: 15 } } },
+        { text: 'Search for offerings left behind.', outcome: { narrative: 'You find a tarnished vial — a health potion, half-full.', rewards: { item: { id: 'shrine_potion', name: 'Ash Vial', description: 'Restores 25 HP.', type: 'consumable' as const, effect: { type: 'heal' as const, base: 25, target: 'self' as const }, quantity: 1, value: 0 } } } },
+        { text: 'Leave it undisturbed.', outcome: { narrative: 'You walk away. Some doors should stay closed.', rewards: { gold: 10 } } },
       ],
-    };
+    },
+    {
+      narrative: 'A figure sits cross-legged among the ruins, eyes closed. Ash collects on their shoulders like snow. They do not seem to breathe.',
+      choices: [
+        { text: 'Sit beside them. Wait.', outcome: { narrative: 'Minutes pass. When you stand, you feel rested — as if time moved differently here.', rewards: { statBoost: { maxHp: 8 } } } },
+        { text: 'Search their belongings.', outcome: { narrative: 'They have nothing but a single coin, impossibly heavy.', rewards: { gold: 30 } } },
+        { text: 'Wake them.', outcome: { narrative: '"You should not have done that." They vanish. Where they sat, a scorched potion remains.', rewards: { item: { id: 'scorched_elixir', name: 'Scorched Elixir', description: 'Restores 60 HP.', type: 'consumable' as const, effect: { type: 'heal' as const, base: 60, target: 'self' as const }, quantity: 1, value: 0 } }, penalties: { hpLoss: 10 } } },
+      ],
+    },
+    {
+      narrative: 'The ground cracks and a geyser of hot ash erupts nearby. In its wake, something glints.',
+      choices: [
+        { text: 'Reach into the ash while it\'s still hot.', outcome: { narrative: 'You pull out a shard of crystallized fire. It burns — but it empowers.', rewards: { statBoost: { attack: 2, speed: 2 } }, penalties: { hpLoss: 20 } } },
+        { text: 'Wait for it to cool.', outcome: { narrative: 'By the time the ash settles, the glint is gone. But the ground yields a few coins.', rewards: { gold: 15 } } },
+      ],
+    },
+    {
+      narrative: 'You hear a voice singing from beneath a collapsed wall. It sounds like a child.',
+      choices: [
+        { text: 'Dig them out.', outcome: { narrative: 'It wasn\'t a child — it was a fire sprite. It dances around you gratefully, leaving warmth.', rewards: { statBoost: { maxMp: 10 } } } },
+        { text: 'It\'s a trap. Keep moving.', outcome: { narrative: 'The singing fades. You\'ll never know what was down there.', rewards: { gold: 5 } } },
+        { text: 'Sing back.', outcome: { narrative: 'The voice harmonizes with yours. For a moment, the ash stops falling. You feel renewed.', rewards: { statBoost: { defense: 2 }, exp: 30 } } },
+      ],
+    },
+  ];
+  for (const node of eventNodes) {
+    const nodeRng = rng.fork(node.id);
+    const picked = ashenEvents[Math.floor(nodeRng.next() * ashenEvents.length)];
+    events[node.id] = { nodeId: node.id, ...picked };
   }
 
   for (const node of shopNodes) {
@@ -638,6 +639,85 @@ export function buildStubDailyContent(date?: Date): DailyContent {
           { type: 'composite', target: 'single_enemy', effects: [
             { type: 'damage', base: 10, scaling: { stat: 'attack', ratio: 0.6 }, target: 'single_enemy', variance: 2 },
             { type: 'damage', base: 10, scaling: { stat: 'attack', ratio: 0.6 }, target: 'single_enemy', variance: 2 },
+          ]}),
+      ]},
+      // ── Level 3 ──
+      { archetypeId: 'emberclaw', level: 3, abilities: [
+        makeAbility('inferno', 'Inferno', 'Engulf all enemies in flames. Heavy fire damage + Burning.', 24,
+          { type: 'composite', target: 'all_enemies', effects: [
+            { type: 'damage', base: 20, scaling: { stat: 'attack', ratio: 0.7 }, element: 'fire', target: 'all_enemies', variance: 4 },
+            { type: 'status', status: BURNING_STATUS, target: 'all_enemies' },
+          ]}),
+        makeAbility('last_stand', 'Last Stand', 'Heal 40 HP and boost defense for 3 turns. Costs more if HP is high.', 16,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'heal', base: 40, target: 'self' },
+            { type: 'stat_modify', statTarget: 'defense', statChange: 6, statDuration: 3, target: 'self' },
+          ]}),
+        makeAbility('ember_cleave', 'Ember Cleave', 'A devastating fire strike that ignores defense.', 20,
+          { type: 'damage', base: 35, scaling: { stat: 'attack', ratio: 1.0 }, element: 'fire', target: 'single_enemy', variance: 6 }),
+      ]},
+      { archetypeId: 'ashweaver', level: 3, abilities: [
+        makeAbility('void_storm', 'Void Storm', 'A reality-tearing storm. Hits all enemies and drains MP.', 28,
+          { type: 'composite', target: 'all_enemies', effects: [
+            { type: 'damage', base: 22, scaling: { stat: 'attack', ratio: 0.6 }, element: 'void', target: 'all_enemies', variance: 5 },
+            { type: 'status', status: POISON_STATUS, target: 'all_enemies' },
+          ]}),
+        makeAbility('arcane_surge', 'Arcane Surge', 'Channel raw magic. Boost attack and speed for 3 turns.', 18,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'stat_modify', statTarget: 'attack', statChange: 6, statDuration: 3, target: 'self' },
+            { type: 'stat_modify', statTarget: 'speed', statChange: 4, statDuration: 3, target: 'self' },
+          ]}),
+        makeAbility('entropy_bolt', 'Entropy Bolt', 'A bolt that weakens everything about the target.', 16,
+          { type: 'composite', target: 'single_enemy', effects: [
+            { type: 'damage', base: 18, scaling: { stat: 'attack', ratio: 0.5 }, element: 'void', target: 'single_enemy' },
+            { type: 'status', status: DEFENSE_DOWN_STATUS, target: 'single_enemy' },
+            { type: 'stat_modify', statTarget: 'speed', statChange: -3, statDuration: 2, target: 'single_enemy' },
+          ]}),
+      ]},
+      { archetypeId: 'dustwalker', level: 3, abilities: [
+        makeAbility('assassinate', 'Assassinate', 'A lethal strike. Massive damage to a single target.', 22,
+          { type: 'damage', base: 40, scaling: { stat: 'attack', ratio: 1.2 }, element: 'shadow', target: 'single_enemy', variance: 8 }),
+        makeAbility('shadow_cloak', 'Shadow Cloak', 'Become hard to hit. Boost speed and gain a shield.', 14,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'stat_modify', statTarget: 'speed', statChange: 6, statDuration: 2, target: 'self' },
+            { type: 'shield', shieldAmount: 25, target: 'self' },
+          ]}),
+        makeAbility('fan_of_knives', 'Fan of Knives', 'Throw blades at all enemies. Fast and cheap.', 10,
+          { type: 'damage', base: 12, scaling: { stat: 'attack', ratio: 0.5 }, element: 'shadow', target: 'all_enemies', variance: 3 }),
+      ]},
+      // ── Level 4 ──
+      { archetypeId: 'emberclaw', level: 4, abilities: [
+        makeAbility('phoenix_strike', 'Phoenix Strike', 'A blazing attack that heals you for damage dealt.', 28,
+          { type: 'drain', base: 35, scaling: { stat: 'attack', ratio: 1.0 }, drainRatio: 0.5, element: 'fire', target: 'single_enemy', variance: 5 }),
+        makeAbility('eruption', 'Eruption', 'Devastate the battlefield. Hits all enemies for massive fire damage.', 30,
+          { type: 'damage', base: 28, scaling: { stat: 'attack', ratio: 0.8 }, element: 'fire', target: 'all_enemies', variance: 6 }),
+        makeAbility('fortify', 'Fortify', 'Massive defense boost and heal. Prepare for the worst.', 20,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'heal', base: 50, target: 'self' },
+            { type: 'shield', shieldAmount: 40, target: 'self' },
+          ]}),
+      ]},
+      { archetypeId: 'ashweaver', level: 4, abilities: [
+        makeAbility('annihilation', 'Annihilation', 'Pure void damage. The highest-damage single-target spell.', 32,
+          { type: 'damage', base: 45, scaling: { stat: 'attack', ratio: 1.2 }, element: 'void', target: 'single_enemy', variance: 8 }),
+        makeAbility('time_warp', 'Time Warp', 'Freeze all enemies for 2 turns (massive speed reduction).', 24,
+          { type: 'stat_modify', statTarget: 'speed', statChange: -10, statDuration: 2, target: 'all_enemies' }),
+        makeAbility('siphon_life', 'Siphon Life', 'Drain HP from all enemies simultaneously.', 26,
+          { type: 'drain', base: 15, scaling: { stat: 'attack', ratio: 0.4 }, drainRatio: 0.8, element: 'void', target: 'all_enemies' }),
+      ]},
+      { archetypeId: 'dustwalker', level: 4, abilities: [
+        makeAbility('execute', 'Execute', 'Finish off a weakened enemy. Triple damage to targets below 30% HP.', 18,
+          { type: 'damage', base: 50, scaling: { stat: 'attack', ratio: 1.5 }, element: 'shadow', target: 'single_enemy', variance: 10 }),
+        makeAbility('vanish', 'Vanish', 'Disappear completely. Heal, shield, and speed boost.', 20,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'heal', base: 30, target: 'self' },
+            { type: 'shield', shieldAmount: 30, target: 'self' },
+            { type: 'stat_modify', statTarget: 'speed', statChange: 8, statDuration: 2, target: 'self' },
+          ]}),
+        makeAbility('poison_storm', 'Poison Storm', 'Poison all enemies and deal shadow damage.', 22,
+          { type: 'composite', target: 'all_enemies', effects: [
+            { type: 'damage', base: 14, scaling: { stat: 'attack', ratio: 0.5 }, element: 'shadow', target: 'all_enemies' },
+            { type: 'status', status: POISON_STATUS, target: 'all_enemies' },
           ]}),
       ]},
     ],

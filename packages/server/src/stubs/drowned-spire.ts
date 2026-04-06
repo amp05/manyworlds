@@ -241,41 +241,43 @@ export function buildDrownedSpireContent(date?: Date): DailyContent {
     };
   }
 
-  for (const node of eventNodes) {
-    events[node.id] = {
-      nodeId: node.id,
+  const spireEvents = [
+    {
       narrative: 'You find a glowing pearl lodged in a coral formation. The water around it hums with power.',
       choices: [
-        {
-          text: 'Pry the pearl free with your bare hands.',
-          outcome: {
-            narrative: 'The pearl cracks — raw energy floods through you.',
-            rewards: { statBoost: { attack: 2, speed: 1 } },
-            penalties: { hpLoss: 10 },
-          },
-        },
-        {
-          text: 'Leave it. The deep protects its treasures for a reason.',
-          outcome: {
-            narrative: 'You turn away. Something in the water seems grateful.',
-            rewards: { gold: 15 },
-          },
-        },
-        {
-          text: 'Carefully extract it with a tool.',
-          outcome: {
-            narrative: 'The pearl comes free intact. A potent healing charm.',
-            rewards: {
-              item: {
-                id: 'deep_pearl', name: 'Deep Pearl', description: 'Restores 60 HP.',
-                type: 'consumable', effect: { type: 'heal', base: 60, target: 'self' },
-                quantity: 1, value: 0,
-              },
-            },
-          },
-        },
+        { text: 'Pry the pearl free with your bare hands.', outcome: { narrative: 'The pearl cracks — raw energy floods through you.', rewards: { statBoost: { attack: 2, speed: 1 } }, penalties: { hpLoss: 10 } } },
+        { text: 'Leave it. The deep protects its treasures for a reason.', outcome: { narrative: 'You turn away. Something in the water seems grateful.', rewards: { gold: 15 } } },
+        { text: 'Carefully extract it with a tool.', outcome: { narrative: 'The pearl comes free intact. A potent healing charm.', rewards: { item: { id: 'deep_pearl', name: 'Deep Pearl', description: 'Restores 60 HP.', type: 'consumable' as const, effect: { type: 'heal' as const, base: 60, target: 'self' as const }, quantity: 1, value: 0 } } } },
       ],
-    };
+    },
+    {
+      narrative: 'An ancient automaton lies half-embedded in the coral wall. Its single eye flickers with dying light.',
+      choices: [
+        { text: 'Salvage its parts.', outcome: { narrative: 'You pry loose a pressure valve. It could come in handy.', rewards: { gold: 25 } } },
+        { text: 'Try to reactivate it.', outcome: { narrative: 'It whirs to life briefly. "PRESSURE ADAPTATION PROTOCOL SHARED." Your armor feels denser.', rewards: { statBoost: { defense: 3 } }, penalties: { hpLoss: 5 } } },
+        { text: 'Leave it in peace.', outcome: { narrative: 'The light fades. You hear a sound like a sigh in the water.', rewards: { statBoost: { maxHp: 5 } } } },
+      ],
+    },
+    {
+      narrative: 'A school of bioluminescent fish swirls around you, forming patterns in the dark water.',
+      choices: [
+        { text: 'Follow them deeper.', outcome: { narrative: 'They lead you to a hidden cache of supplies. Someone stashed these here long ago.', rewards: { item: { id: 'health_potion', name: 'Health Potion', description: 'Restores 50 HP.', type: 'consumable' as const, effect: { type: 'heal' as const, base: 50, target: 'self' as const }, quantity: 1, value: 30 }, gold: 10 } } },
+        { text: 'Catch one.', outcome: { narrative: 'It dissolves into light in your hand. The glow seeps into your skin — you feel faster.', rewards: { statBoost: { speed: 2 } } } },
+        { text: 'Watch them dance.', outcome: { narrative: 'The patterns are mesmerizing. When you snap out of it, you feel strangely refreshed.', rewards: { exp: 40 } } },
+      ],
+    },
+    {
+      narrative: 'The current shifts. A gap in the ruins reveals a chamber with breathable air — and something moving inside.',
+      choices: [
+        { text: 'Enter cautiously.', outcome: { narrative: 'It\'s a hermit crab the size of a dog, wearing a helmet as its shell. It offers you a trade — HP for power.', rewards: { statBoost: { attack: 4 } }, penalties: { hpLoss: 20 } } },
+        { text: 'Call out to it.', outcome: { narrative: '"Friend?" it clicks. It pushes a small treasure toward you and retreats.', rewards: { gold: 20, item: { id: 'coral_charm', name: 'Coral Charm', description: 'Grants Regen for 3 turns.', type: 'consumable' as const, effect: { type: 'status' as const, status: REGEN, target: 'self' as const }, quantity: 1, value: 45 } } } },
+      ],
+    },
+  ];
+  for (const node of eventNodes) {
+    const nodeRng = rng.fork(node.id);
+    const picked = spireEvents[Math.floor(nodeRng.next() * spireEvents.length)];
+    events[node.id] = { nodeId: node.id, ...picked };
   }
 
   for (const node of shopNodes) {
@@ -521,6 +523,85 @@ export function buildDrownedSpireContent(date?: Date): DailyContent {
           ]}),
         makeAbility('tide_drain', 'Tide Drain', 'Drain life from an enemy.', 12,
           { type: 'drain', base: 16, scaling: { stat: 'attack', ratio: 0.5 }, drainRatio: 0.6, target: 'single_enemy', element: 'water' }),
+      ]},
+      // ── Level 3 ──
+      { archetypeId: 'tidecaller', level: 3, abilities: [
+        makeAbility('glacial_spike', 'Glacial Spike', 'Massive single-target ice damage.', 20,
+          { type: 'damage', base: 32, scaling: { stat: 'attack', ratio: 0.9 }, element: 'ice', target: 'single_enemy', variance: 5 }),
+        makeAbility('frost_armor', 'Frost Armor', 'Shield yourself in ice. Absorbs damage and slows attackers.', 16,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'shield', shieldAmount: 35, target: 'self' },
+            { type: 'stat_modify', statTarget: 'defense', statChange: 4, statDuration: 3, target: 'self' },
+          ]}),
+        makeAbility('chain_frost', 'Chain Frost', 'Ice damage bounces between enemies. Hits all + Frostbite.', 24,
+          { type: 'composite', target: 'all_enemies', effects: [
+            { type: 'damage', base: 16, scaling: { stat: 'attack', ratio: 0.5 }, element: 'ice', target: 'all_enemies', variance: 3 },
+            { type: 'status', status: FROSTBITE, target: 'all_enemies' },
+          ]}),
+      ]},
+      { archetypeId: 'depthwalker', level: 3, abilities: [
+        makeAbility('tidal_wave', 'Tidal Wave', 'Crash into all enemies. Water damage + Soaked.', 22,
+          { type: 'composite', target: 'all_enemies', effects: [
+            { type: 'damage', base: 20, scaling: { stat: 'attack', ratio: 0.7 }, element: 'water', target: 'all_enemies', variance: 4 },
+            { type: 'status', status: SOAKED, target: 'all_enemies' },
+          ]}),
+        makeAbility('iron_will', 'Iron Will', 'Heal and massively boost defense.', 18,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'heal', base: 35, target: 'self' },
+            { type: 'stat_modify', statTarget: 'defense', statChange: 8, statDuration: 3, target: 'self' },
+          ]}),
+        makeAbility('crushing_blow', 'Crushing Blow', 'The hardest-hitting single attack.', 20,
+          { type: 'damage', base: 38, scaling: { stat: 'attack', ratio: 1.1 }, element: 'earth', target: 'single_enemy', variance: 6 }),
+      ]},
+      { archetypeId: 'pearlweaver', level: 3, abilities: [
+        makeAbility('moonfall', 'Moonfall', 'Void damage rains on all enemies from above.', 24,
+          { type: 'damage', base: 22, scaling: { stat: 'attack', ratio: 0.7 }, element: 'void', target: 'all_enemies', variance: 4 }),
+        makeAbility('greater_mend', 'Greater Mend', 'Massive heal + cleanse all debuffs via Regen.', 20,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'heal', base: 50, target: 'self' },
+            { type: 'status', status: REGEN, target: 'self' },
+          ]}),
+        makeAbility('spirit_lance', 'Spirit Lance', 'Drain life from an enemy. Heals more than Tide Drain.', 16,
+          { type: 'drain', base: 22, scaling: { stat: 'attack', ratio: 0.6 }, drainRatio: 0.7, target: 'single_enemy', element: 'void' }),
+      ]},
+      // ── Level 4 ──
+      { archetypeId: 'tidecaller', level: 4, abilities: [
+        makeAbility('absolute_zero', 'Absolute Zero', 'The ultimate ice spell. Massive damage to all enemies.', 30,
+          { type: 'composite', target: 'all_enemies', effects: [
+            { type: 'damage', base: 28, scaling: { stat: 'attack', ratio: 0.8 }, element: 'ice', target: 'all_enemies', variance: 5 },
+            { type: 'status', status: FROSTBITE, target: 'all_enemies' },
+            { type: 'stat_modify', statTarget: 'speed', statChange: -8, statDuration: 2, target: 'all_enemies' },
+          ]}),
+        makeAbility('ice_coffin', 'Ice Coffin', 'Entomb a single enemy in ice. Devastating damage.', 26,
+          { type: 'damage', base: 45, scaling: { stat: 'attack', ratio: 1.2 }, element: 'ice', target: 'single_enemy', variance: 8 }),
+        makeAbility('permafrost', 'Permafrost', 'Shield of eternal ice. Massive defense + shield.', 22,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'shield', shieldAmount: 50, target: 'self' },
+            { type: 'stat_modify', statTarget: 'defense', statChange: 6, statDuration: 3, target: 'self' },
+          ]}),
+      ]},
+      { archetypeId: 'depthwalker', level: 4, abilities: [
+        makeAbility('leviathan_strike', 'Leviathan Strike', 'Channel the power of the deep. Massive damage + drain.', 28,
+          { type: 'drain', base: 42, scaling: { stat: 'attack', ratio: 1.2 }, drainRatio: 0.4, element: 'water', target: 'single_enemy', variance: 6 }),
+        makeAbility('trench_slam', 'Trench Slam', 'Shake the ocean floor. Hits all enemies hard.', 26,
+          { type: 'damage', base: 26, scaling: { stat: 'attack', ratio: 0.8 }, element: 'earth', target: 'all_enemies', variance: 5 }),
+        makeAbility('abyssal_armor', 'Abyssal Armor', 'Become nearly indestructible for 3 turns.', 24,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'heal', base: 40, target: 'self' },
+            { type: 'shield', shieldAmount: 50, target: 'self' },
+            { type: 'stat_modify', statTarget: 'defense', statChange: 10, statDuration: 3, target: 'self' },
+          ]}),
+      ]},
+      { archetypeId: 'pearlweaver', level: 4, abilities: [
+        makeAbility('eclipse', 'Eclipse', 'The moon goes dark. Massive void damage to all.', 30,
+          { type: 'damage', base: 30, scaling: { stat: 'attack', ratio: 0.9 }, element: 'void', target: 'all_enemies', variance: 6 }),
+        makeAbility('full_restore', 'Full Restore', 'Heal to near-full HP + massive Regen.', 28,
+          { type: 'composite', target: 'self', effects: [
+            { type: 'heal', base: 70, target: 'self' },
+            { type: 'status', status: REGEN, target: 'self' },
+          ]}),
+        makeAbility('void_siphon', 'Void Siphon', 'Drain life from all enemies simultaneously.', 24,
+          { type: 'drain', base: 16, scaling: { stat: 'attack', ratio: 0.5 }, drainRatio: 0.8, element: 'void', target: 'all_enemies' }),
       ]},
     ],
   };
