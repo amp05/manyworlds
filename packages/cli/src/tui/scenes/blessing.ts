@@ -2,10 +2,11 @@
  * Blessing selection scene.
  */
 import type { Blessing, DailyContent } from '@manyworlds/shared';
-import { Screen, C } from '../screen.js';
+import type { IScreen } from '../screen-interface.js';
+import { C } from '../colors.js';
 import { applyScanlines, wipeTransition } from '../animation.js';
 
-export async function runBlessingScene(screen: Screen, content: DailyContent): Promise<Blessing> {
+export async function runBlessingScene(screen: IScreen, content: DailyContent): Promise<Blessing> {
   screen.clear();
   screen.box(0, 0, screen.width, screen.height, C.border);
 

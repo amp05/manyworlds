@@ -2,7 +2,8 @@
  * Title screen with animated ASCII art reveal.
  */
 import type { DailyContent } from '@manyworlds/shared';
-import { Screen, C } from '../screen.js';
+import type { IScreen } from '../screen-interface.js';
+import { C } from '../colors.js';
 import { typewrite, fadeInText, wipeTransition, applyScanlines } from '../animation.js';
 
 const TITLE_ART = [
@@ -12,7 +13,7 @@ const TITLE_ART = [
   ' |_|  |_/_/ \\_\\_|\\_| |_|     \\_/ \\___/|_|_\\|____|___/|___/',
 ];
 
-export async function showTitleScene(screen: Screen, content: DailyContent): Promise<void> {
+export async function showTitleScene(screen: IScreen, content: DailyContent): Promise<void> {
   screen.clear();
 
   // Draw border frame

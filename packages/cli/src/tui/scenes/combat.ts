@@ -23,13 +23,14 @@ import {
   getCurrentEntity, type CombatState, type PlayerAction, type TurnEvent,
 } from '@manyworlds/engine';
 import { applyExp, awardExp, awardGold } from '@manyworlds/engine';
-import { Screen, C } from '../screen.js';
+import type { IScreen } from '../screen-interface.js';
+import { C } from '../colors.js';
 import { drawSprite, getSpriteForEntity, flashSprite } from '../sprites.js';
 import { tween, Easing, typewrite, screenShake, flashRegion, applyScanlines } from '../animation.js';
 
 // ── Layout constants (adaptive to screen size) ─────────────────────────
 
-function layout(screen: Screen) {
+function layout(screen: IScreen) {
   const w = screen.width;
   const h = screen.height;
   const battleH = Math.min(10, Math.max(7, Math.floor(h * 0.28)));
@@ -80,7 +81,7 @@ function labelEntities(entities: Entity[]): string[] {
 // ── Draw functions ──────────────────────────────────────────────────────
 
 function drawBattleArea(
-  screen: Screen, L: ReturnType<typeof layout>,
+  screen: IScreen, L: ReturnType<typeof layout>,
   playerEntity: Entity, enemies: Entity[],
   playerPalette?: { primary: string; secondary: string; accent: string },
 ): { playerSpritePos: { x: number; y: number }; enemySpritePositions: { x: number; y: number }[] } {
@@ -122,7 +123,7 @@ export interface CombatSceneResult {
 }
 
 export async function runCombatScene(
-  screen: Screen,
+  screen: IScreen,
   player: Entity,
   enemies: Entity[],
   playerBlessing: BlessingRuntime,

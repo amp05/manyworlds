@@ -2,10 +2,11 @@
  * Character interview scene with animated reveals.
  */
 import type { DailyContent, CharacterArchetype } from '@manyworlds/shared';
-import { Screen, C } from '../screen.js';
+import type { IScreen } from '../screen-interface.js';
+import { C } from '../colors.js';
 import { typewrite, fadeInText, wipeTransition, applyScanlines } from '../animation.js';
 
-export async function runInterviewScene(screen: Screen, content: DailyContent): Promise<CharacterArchetype> {
+export async function runInterviewScene(screen: IScreen, content: DailyContent): Promise<CharacterArchetype> {
   const archetypes = content.characters;
   const affinities: Record<string, number> = {};
   for (const a of archetypes) affinities[a.id] = 0;

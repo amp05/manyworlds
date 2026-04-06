@@ -11,7 +11,7 @@
  * Colors are applied per-character via a palette map:
  *   1 = primary, 2 = secondary, 3 = accent, 4 = skin/detail, 5 = dark
  */
-import { Screen } from './screen.js';
+import type { IScreen } from './screen-interface.js';
 
 interface SpriteFrame {
   rows: string[];       // block characters per row
@@ -21,7 +21,7 @@ interface SpriteFrame {
 
 /** Draw a sprite at (x, y). Each character is colored per its palette index. */
 export function drawSprite(
-  screen: Screen,
+  screen: IScreen,
   x: number, y: number,
   sprite: SpriteFrame,
   bg = '#171717',
@@ -173,7 +173,7 @@ export function getSpriteForEntity(
 
 /** Flash a sprite (damage effect) — briefly turn all pixels red/white */
 export async function flashSprite(
-  screen: Screen,
+  screen: IScreen,
   x: number, y: number,
   sprite: SpriteFrame,
   flashColor = '#ef4444',

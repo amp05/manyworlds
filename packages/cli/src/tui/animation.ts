@@ -2,7 +2,8 @@
  * Animation engine for terminal UI.
  * Provides tweens, timers, and frame-based animation loops.
  */
-import { Screen, C } from './screen.js';
+import type { IScreen } from './screen-interface.js';
+import { C } from './colors.js';
 
 export type EasingFn = (t: number) => number;
 
@@ -19,7 +20,7 @@ export const Easing = {
 
 /** Animate a value from `from` to `to` over `duration` ms */
 export async function tween(
-  screen: Screen,
+  screen: IScreen,
   duration: number,
   from: number,
   to: number,
@@ -42,7 +43,7 @@ export async function tween(
 
 /** Flash a rectangular region with a color, then restore */
 export async function flashRegion(
-  screen: Screen,
+  screen: IScreen,
   x: number, y: number, w: number, h: number,
   color: string,
   durationMs = 150,
@@ -72,7 +73,7 @@ export async function flashRegion(
 
 /** Typewriter effect — reveal text character by character */
 export async function typewrite(
-  screen: Screen,
+  screen: IScreen,
   x: number, y: number,
   text: string,
   fg: string = C.fg, bg: string = C.bg,
@@ -87,7 +88,7 @@ export async function typewrite(
 
 /** Fade in text (dim → full brightness) */
 export async function fadeInText(
-  screen: Screen,
+  screen: IScreen,
   x: number, y: number,
   text: string,
   targetFg: string,
@@ -106,7 +107,7 @@ export async function fadeInText(
 
 /** Screen wipe transition (left to right) */
 export async function wipeTransition(
-  screen: Screen,
+  screen: IScreen,
   durationMs = 400,
   color = C.border,
 ): Promise<void> {
@@ -126,7 +127,7 @@ export async function wipeTransition(
 }
 
 /** Apply a scanline overlay effect (for CRT feel) */
-export function applyScanlines(screen: Screen): void {
+export function applyScanlines(screen: IScreen): void {
   for (let y = 0; y < screen.height; y += 2) {
     for (let x = 0; x < screen.width; x++) {
       const cell = screen.get(x, y);
@@ -144,7 +145,7 @@ export function applyScanlines(screen: Screen): void {
 
 /** Shake effect — briefly shift the screen content */
 export async function screenShake(
-  screen: Screen,
+  screen: IScreen,
   intensity = 1,
   durationMs = 200,
 ): Promise<void> {
