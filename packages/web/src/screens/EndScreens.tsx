@@ -78,7 +78,7 @@ export function VictoryScreen() {
       <pre className="term-block">
 {'\n'}
 <Span color={C.success} bold>  Against all odds, you prevailed.</Span>{'\n'}
-<Span color={C.success}>  The {content.world.name} will remember your name.</Span>{'\n'}
+<Span color={C.success}>  {content.world.name} will remember your name.</Span>{'\n'}
 {'\n'}
 <Sep />
 <Span color={C.title}>{'  ─── Run Summary ───'}</Span>{'\n'}
@@ -108,7 +108,7 @@ export function DefeatScreen() {
       <Header title="D E F E A T" />
       <pre className="term-block">
 {'\n'}
-<Span color={C.hpLow}>  The {content?.world.name ?? 'wastes'} claims another wanderer.</Span>{'\n'}
+<Span color={C.hpLow}>  {content?.world.name ?? 'wastes'} claims another wanderer.</Span>{'\n'}
 {'\n'}
 <Sep />
 {'  '}<Span color={C.dim}>Character:  </Span><Span color={C.fg}>{player.name} Lv{player.level}</Span>{'\n'}

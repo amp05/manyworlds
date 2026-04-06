@@ -1045,7 +1045,7 @@ async function showDefeat(state: RunState): Promise<void> {
   printBlank();
   print(header('D E F E A T'));
   printBlank();
-  print(colorize(`  The ${state.content.world.name} claims another wanderer.`, COLORS.hpLow));
+  print(colorize(`  ${state.content.world.name} claims another wanderer.`, COLORS.hpLow));
   printBlank();
   printSep();
   print(`  ${colorize('Character:', COLORS.fg)} ${state.player.name} Lv${state.player.level}`);

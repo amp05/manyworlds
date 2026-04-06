@@ -272,7 +272,7 @@ async function showEndScreen(
   if (victory) {
     screen.centerText(Math.floor(screen.height / 2) - 2, 'Against all odds, you prevailed.', C.success);
   } else {
-    screen.centerText(Math.floor(screen.height / 2) - 2, `The ${content.world.name} claims another wanderer.`, C.hpLow);
+    screen.centerText(Math.floor(screen.height / 2) - 2, `${content.world.name} claims another wanderer.`, C.hpLow);
   }
   screen.hline(2, Math.floor(screen.height / 2), screen.width - 4, '─', C.border);
   const y = Math.floor(screen.height / 2) + 1;

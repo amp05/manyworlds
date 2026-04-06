@@ -386,7 +386,7 @@ async function showDefeatScreen(
   screen.clear();
   screen.box(0, 0, screen.width, screen.height, C.hpLow);
   screen.centerText(Math.floor(screen.height / 2) - 3, '=== D E F E A T ===', C.hpLow, C.bg, true);
-  screen.centerText(Math.floor(screen.height / 2) - 1, `The ${content.world.name} claims another wanderer.`, C.hpLow);
+  screen.centerText(Math.floor(screen.height / 2) - 1, `${content.world.name} claims another wanderer.`, C.hpLow);
   screen.hline(2, Math.floor(screen.height / 2) + 1, screen.width - 4, '─', C.border);
   const y = Math.floor(screen.height / 2) + 2;
   screen.text(4, y, `Character: ${player.name} Lv${player.level}`, C.fg);
