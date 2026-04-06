@@ -201,8 +201,8 @@ function mockAdjudicate(req: AdjudicationRequest): AdjudicationResponse {
     if (!targetEntityId || !damageAmount) return { stateDelta: [], blessingState: state, narration: '', noEffect: true };
     const target = gameState.entities.find((e) => e.id === targetEntityId);
     if (!target || target.stats.hp <= 0) return { stateDelta: [], blessingState: state, narration: '', noEffect: true };
-    // Only heal the boss (blessing owner)
-    if (target.isPlayer) return { stateDelta: [], blessingState: state, narration: '', noEffect: true };
+    // Only triggers when the BOSS (non-player) takes damage — not when the player is hit
+    if (!!target.isPlayer) return { stateDelta: [], blessingState: state, narration: '', noEffect: true };
     const heal = Math.min(10, Math.round(damageAmount * 0.15));
     return {
       stateDelta: [{ entityId: targetEntityId, hpChange: heal }],

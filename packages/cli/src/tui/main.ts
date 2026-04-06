@@ -8,7 +8,7 @@ import { SeededRNG } from '@manyworlds/shared';
 import { getFrontierNodes } from '@manyworlds/engine';
 import { applyExp } from '@manyworlds/engine';
 import { Screen, C } from './screen.js';
-import { applyScanlines, wipeTransition } from './animation.js';
+import { applyScanlines, wipeTransition, typewrite } from './animation.js';
 import { showTitleScene } from './scenes/title.js';
 import { runInterviewScene } from './scenes/interview.js';
 import { runBlessingScene } from './scenes/blessing.js';
@@ -386,15 +386,43 @@ async function showDefeatScreen(
   screen: Screen, player: Entity, blessing: BlessingRuntime,
   nodes: number, content: DailyContent,
 ): Promise<void> {
+  // Animated defeat — screen fills with static/corruption
+  for (let frame = 0; frame < 6; frame++) {
+    screen.clear();
+    // Progressive corruption effect
+    for (let y = 0; y < screen.height; y++) {
+      for (let x = 0; x < screen.width; x++) {
+        if (Math.random() < frame * 0.04) {
+          const chars = '░▒▓█';
+          screen.set(x, y, chars[Math.floor(Math.random() * chars.length)], '#3b1010', C.bg);
+        }
+      }
+    }
+    screen.centerText(Math.floor(screen.height / 2), '=== D E F E A T ===', C.hpLow, C.bg, true);
+    screen.flush();
+    await screen.sleep(150);
+  }
+
+  // Final screen
   screen.clear();
   screen.box(0, 0, screen.width, screen.height, C.hpLow);
-  screen.centerText(Math.floor(screen.height / 2) - 3, '=== D E F E A T ===', C.hpLow, C.bg, true);
-  screen.centerText(Math.floor(screen.height / 2) - 1, `${content.world.name} claims another wanderer.`, C.hpLow);
-  screen.hline(2, Math.floor(screen.height / 2) + 1, screen.width - 4, '─', C.border);
-  const y = Math.floor(screen.height / 2) + 2;
+
+  const cy = Math.floor(screen.height / 2) - 4;
+  await typewrite(screen, Math.floor((screen.width - 19) / 2), cy, '=== D E F E A T ===', C.hpLow, C.bg, 30);
+  await screen.sleep(300);
+
+  screen.centerText(cy + 2, `${content.world.name} claims another wanderer.`, C.hpLow);
+  screen.flush();
+  await screen.sleep(400);
+
+  screen.hline(2, cy + 4, screen.width - 4, '─', C.border);
+  const y = cy + 5;
   screen.text(4, y, `Character: ${player.name} Lv${player.level}`, C.fg);
   screen.text(4, y + 1, `Blessing:  ${blessing.name}`, C.blessing);
   screen.text(4, y + 2, `Nodes:     ${nodes}`, C.dim);
+  screen.flush();
+  await screen.sleep(300);
+
   screen.centerText(screen.height - 3, '[ Press ENTER to play again ]', C.dim);
   applyScanlines(screen);
   screen.flush();

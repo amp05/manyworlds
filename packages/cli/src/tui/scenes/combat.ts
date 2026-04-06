@@ -33,7 +33,7 @@ import { tween, Easing, typewrite, screenShake, flashRegion, applyScanlines } fr
 function layout(screen: IScreen) {
   const w = screen.width;
   const h = screen.height;
-  const battleH = Math.min(10, Math.max(7, Math.floor(h * 0.28)));
+  const battleH = Math.min(9, Math.max(7, Math.floor(h * 0.25)));
   // Menu is always at the bottom, log above it, everything else flows down from battle
   const menuH = 4;
   const menuY = h - menuH - 1;
@@ -208,7 +208,27 @@ export async function runCombatScene(
 ): Promise<CombatSceneResult> {
   const combat = initCombat(enemies, player, playerBlessing, bossBlessing, rng);
   const logLines: string[] = [];
+  const roundLog: string[] = []; // Accumulates within a round, clears between rounds
+  let lastRound = combat.turnNumber;
   const L = layout(screen);
+
+  // Build a name map for entities so log entries use (A)/(B) labels
+  const allEnemyEntities = combat.entities.filter((e) => !e.isPlayer);
+  const entityLabels = new Map<string, string>();
+  const eLabels = labelEntities(allEnemyEntities);
+  for (let i = 0; i < allEnemyEntities.length; i++) {
+    entityLabels.set(allEnemyEntities[i].id, eLabels[i]);
+  }
+  const playerEntity0 = combat.entities.find((e) => e.isPlayer)!;
+  entityLabels.set(playerEntity0.id, playerEntity0.name);
+
+  /** Replace entity names in event text with labeled versions */
+  function labelEventText(text: string): string {
+    // Disabled — post-hoc replacement causes double-labeling ("Tidal Imp (B) (A)")
+    // The turn order bar already labels entities clearly.
+    // TODO: Fix engine to generate labeled names at event creation time.
+    return text;
+  }
 
   // Helper: adjudicate pending triggers
   async function processTriggers(): Promise<string[]> {
@@ -233,6 +253,7 @@ export async function runCombatScene(
           const prefix = blessing.owner === 'player' ? '*' : 'x';
           const line = `${prefix} ${response.narration}`;
           logLines.push(line);
+          roundLog.push(line);
           narrations.push(line);
         }
         if (blessing.state.usedAbilities) {
@@ -250,12 +271,20 @@ export async function runCombatScene(
 
   // Process one turn — shows action events, then blessing resolution with loading state
   async function doTurn(action: PlayerAction | null): Promise<{ events: string[]; blessingFired: boolean; hadCrit: boolean }> {
+    // Clear round log if a new round started
+    if (combat.turnNumber !== lastRound) {
+      roundLog.length = 0;
+      lastRound = combat.turnNumber;
+    }
+
     const events: string[] = [];
     let hadCrit = false;
     const result = processTurn(combat, action, rng);
     for (const ev of result.events) {
-      logLines.push(ev.details);
-      events.push(ev.details);
+      const labeled = labelEventText(ev.details);
+      logLines.push(labeled);
+      events.push(labeled);
+      roundLog.push(labeled);
       if (ev.crit) hadCrit = true;
     }
 
@@ -263,9 +292,24 @@ export async function runCombatScene(
     // with a "blessing resolving" indicator, THEN do the LLM call
     const hasTriggers = combat.pendingTriggers.length > 0;
     if (hasTriggers) {
-      const waitEvents = [...events, '', '  . . . a blessing stirs . . .'];
-      render(waitEvents, false, true);
-      await screen.sleep(400);
+      // Show events so far, then animate the blessing activation
+      for (const e of events) roundLog.push(e);
+      render(events, false, true);
+      await screen.sleep(200);
+
+      // Blessing activation animation
+      const blessingName = playerBlessing.name;
+      const frames = [
+        `  ~~ ${blessingName} ~~`,
+        `  ~*~ ${blessingName} ~*~`,
+        `  ~**~ ${blessingName} ~**~`,
+        `  ~~*~~ ${blessingName} ~~*~~`,
+      ];
+      for (const frame of frames) {
+        const logWithBlessing = [...events, '', frame];
+        render(logWithBlessing, false, true);
+        await screen.sleep(120);
+      }
     }
 
     const narrations = await processTriggers();
@@ -322,12 +366,7 @@ export async function runCombatScene(
     y += 1;
     screen.text(L.pad + 22, y, '     MP ', C.dim);
     screen.bar(L.pad + 30, y, 14, p.stats.mp, p.stats.maxMp, C.mp);
-    screen.text(L.pad + 45, y, ` ${p.stats.mp}/${p.stats.maxMp}`, C.dim);
-    y += 1;
-    // Player combat stats
-    screen.text(L.pad + 4, y, `ATK ${p.stats.attack}`, C.fire);
-    screen.text(L.pad + 14, y, `DEF ${p.stats.defense}`, C.earth);
-    screen.text(L.pad + 24, y, `SPD ${p.stats.speed}`, C.player);
+    screen.text(L.pad + 45, y, ` ${p.stats.mp}/${p.stats.maxMp}  ATK ${p.stats.attack} DEF ${p.stats.defense} SPD ${p.stats.speed}`, C.dim);
     y += 1;
     for (const s of p.statuses) {
       const desc = describeStatus(s as any);
@@ -336,26 +375,12 @@ export async function runCombatScene(
       y += 1;
     }
 
-    // ── Blessing bar ──
-    screen.hline(L.pad, y, L.w - L.pad * 2, '─', blessingJustFired ? C.blessing : C.border);
+    // ── Blessing (compact — names only on one line) ──
+    const blessingLine = bossBlessing
+      ? `* ${playerBlessing.name}  |  x ${bossBlessing.name}`
+      : `* ${playerBlessing.name}`;
+    screen.text(L.pad, y, blessingLine, blessingJustFired ? C.blessing : C.dim);
     y += 1;
-    const bColor = blessingJustFired ? C.blessing : C.dim;
-    screen.text(L.pad, y, `* ${playerBlessing.name}`, C.blessing, C.bg, true);
-    y += 1;
-    const bLines = wrapText(blessingText, L.w - L.pad * 2 - 2);
-    for (const bl of bLines) {
-      screen.text(L.pad + 2, y, bl, bColor);
-      y += 1;
-    }
-    if (bossBlessing) {
-      screen.text(L.pad, y, `x ${bossBlessing.name}`, C.enemy, C.bg, true);
-      y += 1;
-      const bbLines = wrapText(bossText, L.w - L.pad * 2 - 2);
-      for (const bl of bbLines) {
-        screen.text(L.pad + 2, y, bl, bColor);
-        y += 1;
-      }
-    }
 
     // ── Turn order + round indicator ──
     screen.hline(L.pad, y, L.w - L.pad * 2, '─', C.border);
@@ -390,7 +415,8 @@ export async function runCombatScene(
     screen.hline(L.pad, y, L.w - L.pad * 2, '─', C.border);
     y += 1;
     const logSpace = L.menuY - y - 1;
-    const eventsToShow = turnEvents.length > 0 ? turnEvents : logLines;
+    // Show current round's accumulated log (persists across turns within the round)
+    const eventsToShow = roundLog.length > 0 ? roundLog : logLines;
     const maxLineW = L.w - L.pad * 2 - 4; // width for "> " prefix + content
 
     // Wrap all log lines, then take the most recent that fit
@@ -477,18 +503,22 @@ export async function runCombatScene(
 
       if (choice >= 1 && choice <= numAbilities) {
         const ability = playerEntity.abilities[choice - 1];
-        // Check if ability is usable
         if (playerEntity.stats.mp < ability.mpCost || ability.lockedForCombat || (ability.currentCooldown && ability.currentCooldown > 0)) {
-          continue; // Can't use — redraw
+          continue;
         }
         if (ability.effect.target === 'single_enemy' && combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0).length > 1) {
-          // Target selection with cancel
+          // Target selection — clear menu area first, then show submenu
           const liveEnemies = combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0);
           const tLabels = labelEntities(liveEnemies);
-          screen.text(L.pad, L.menuY + 2, 'Target: ' + tLabels.map((l, i) => `[${i + 1}] ${l}`).join('  ') + '  [0] Cancel', C.fg);
+          screen.fill(L.pad, L.menuY + 1, L.w - L.pad * 2, L.menuH, ' ');
+          screen.text(L.pad, L.menuY + 1, `${ability.name} -- Choose target:`, C.fg, C.bg, true);
+          for (let ti = 0; ti < tLabels.length; ti++) {
+            screen.text(L.pad + 2, L.menuY + 2 + ti, `[${ti + 1}] ${tLabels[ti]} (${liveEnemies[ti].stats.hp}/${liveEnemies[ti].stats.maxHp} HP)`, C.selected);
+          }
+          screen.text(L.pad + 2, L.menuY + 2 + tLabels.length, '[0] Cancel', C.dim);
           screen.flush();
           const target = await screen.waitNumber(liveEnemies.length);
-          if (target === 0) continue; // Cancel — back to menu
+          if (target === 0) continue;
           action = { type: 'ability', abilityId: ability.id, targetId: liveEnemies[target - 1].id };
         } else {
           action = { type: 'ability', abilityId: ability.id };
@@ -496,23 +526,27 @@ export async function runCombatScene(
       } else if (choice === numAbilities + 1) {
         action = { type: 'defend' };
       } else if (choice === numAbilities + 2) {
-        // Items with cancel
+        // Items — clear menu area, show items submenu
         const consumables = playerEntity.inventory.filter((i) => i.type === 'consumable' && i.quantity > 0);
+        screen.fill(L.pad, L.menuY + 1, L.w - L.pad * 2, L.menuH, ' ');
         if (consumables.length === 0) {
-          screen.text(L.pad, L.menuY + 2, 'No items. Press any key.', C.dim);
+          screen.text(L.pad, L.menuY + 1, 'No items available. Press any key.', C.dim);
           screen.flush();
           await screen.waitKey();
           continue;
         }
-        screen.text(L.pad, L.menuY + 2, consumables.map((item, i) => `[${i + 1}] ${item.name} x${item.quantity}`).join('  ') + '  [0] Cancel', C.fg);
+        screen.text(L.pad, L.menuY + 1, 'Use item:', C.fg, C.bg, true);
+        for (let ii = 0; ii < consumables.length; ii++) {
+          screen.text(L.pad + 2, L.menuY + 2 + ii, `[${ii + 1}] ${consumables[ii].name} x${consumables[ii].quantity}  ${consumables[ii].description}`, C.selected);
+        }
+        screen.text(L.pad + 2, L.menuY + 2 + consumables.length, '[0] Cancel', C.dim);
         screen.flush();
         const ic = await screen.waitNumber(consumables.length);
-        if (ic === 0) continue; // Cancel
+        if (ic === 0) continue;
         action = { type: 'item', itemId: consumables[ic - 1].id };
       } else if (choice === numAbilities + 3) {
-        // Inspect enemies
         await showInspect(screen, L, combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0));
-        continue; // Back to menu after inspect
+        continue;
       }
     }
 
