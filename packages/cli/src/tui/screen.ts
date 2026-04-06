@@ -1,11 +1,21 @@
 /**
  * Full-screen terminal renderer built on terminal-kit.
- * Double-buffered cell grid with true-color support.
+ * Supports both interactive (real terminal) and headless (programmatic) modes.
+ *
+ * Headless mode: no terminal-kit dependency, renders to an in-memory grid.
+ * Input comes from a queue. The screen can be dumped as plain text.
+ * This lets Claude play the game and iterate on it.
  */
-// @ts-expect-error — terminal-kit has no types
-import termkit from 'terminal-kit';
+let term: any = null;
 
-const term = termkit.terminal;
+function getTerm() {
+  if (!term) {
+    // Dynamic import so headless mode doesn't need terminal-kit
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    term = require('terminal-kit').terminal;
+  }
+  return term;
+}
 
 export interface Cell {
   char: string;
@@ -24,10 +34,24 @@ export class Screen {
   private _dirty = true;
   private _inputHandler: ((key: string) => void) | null = null;
   private _started = false;
+  readonly headless: boolean;
 
-  constructor() {
-    this.width = term.width || 80;
-    this.height = term.height || 24;
+  // Headless mode: input queue
+  private _inputQueue: string[] = [];
+  private _inputWaiters: ((key: string) => void)[] = [];
+  // Headless mode: callback on each flush (so the player agent can read the screen)
+  private _onFlush: ((text: string) => void) | null = null;
+
+  constructor(opts?: { headless?: boolean; width?: number; height?: number }) {
+    this.headless = opts?.headless ?? false;
+    if (this.headless) {
+      this.width = opts?.width ?? 80;
+      this.height = opts?.height ?? 24;
+    } else {
+      const t = getTerm();
+      this.width = t.width || 80;
+      this.height = t.height || 24;
+    }
     this.cells = this.makeGrid();
     this.prevCells = this.makeGrid();
   }
@@ -48,11 +72,14 @@ export class Screen {
   start(): void {
     if (this._started) return;
     this._started = true;
-    term.fullscreen(true);
-    term.grabInput({ mouse: false });
-    term('\x1b[?25l'); // hide cursor
+    if (this.headless) return;
 
-    term.on('key', (key: string) => {
+    const t = getTerm();
+    t.fullscreen(true);
+    t.grabInput({ mouse: false });
+    t('\x1b[?25l'); // hide cursor
+
+    t.on('key', (key: string) => {
       if (key === 'CTRL_C') {
         this.stop();
         process.exit(0);
@@ -60,8 +87,7 @@ export class Screen {
       if (this._inputHandler) this._inputHandler(key);
     });
 
-    // Handle resize
-    term.on('resize', (w: number, h: number) => {
+    t.on('resize', (w: number, h: number) => {
       this.width = w;
       this.height = h;
       this.cells = this.makeGrid();
@@ -72,11 +98,13 @@ export class Screen {
 
   /** Exit full-screen mode */
   stop(): void {
-    term.fullscreen(false);
-    term.grabInput(false);
-    term('\x1b[?25h'); // show cursor (raw escape)
-    term.styleReset();
     this._started = false;
+    if (this.headless) return;
+    const t = getTerm();
+    t.fullscreen(false);
+    t.grabInput(false);
+    t('\x1b[?25h');
+    t.styleReset();
   }
 
   /** Set the keyboard input handler */
@@ -86,6 +114,16 @@ export class Screen {
 
   /** Wait for a single keypress */
   waitKey(): Promise<string> {
+    if (this.headless) {
+      // In headless mode, consume from the input queue
+      if (this._inputQueue.length > 0) {
+        return Promise.resolve(this._inputQueue.shift()!);
+      }
+      // Wait for input to be queued
+      return new Promise((resolve) => {
+        this._inputWaiters.push(resolve);
+      });
+    }
     return new Promise((resolve) => {
       const prev = this._inputHandler;
       this._inputHandler = (key) => {
@@ -113,6 +151,38 @@ export class Screen {
     }
   }
 
+  // ── Headless mode API ─────────────────────────────────────────────────
+
+  /** Queue a keypress (headless mode only) */
+  sendKey(key: string): void {
+    if (this._inputWaiters.length > 0) {
+      const waiter = this._inputWaiters.shift()!;
+      waiter(key);
+    } else {
+      this._inputQueue.push(key);
+    }
+  }
+
+  /** Set a callback that fires after each flush with the screen text */
+  onFlush(handler: (text: string) => void): void {
+    this._onFlush = handler;
+  }
+
+  /** Dump the current screen as plain text (strips colors) */
+  dumpText(): string {
+    const lines: string[] = [];
+    for (let y = 0; y < this.height; y++) {
+      let line = '';
+      for (let x = 0; x < this.width; x++) {
+        line += this.cells[y]?.[x]?.char ?? ' ';
+      }
+      lines.push(line.trimEnd());
+    }
+    // Trim trailing empty lines
+    while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+    return lines.join('\n');
+  }
+
   // ── Drawing primitives ────────────────────────────────────────────────
 
   /** Clear the buffer to the default background */
@@ -128,7 +198,7 @@ export class Screen {
   /** Set a single cell */
   set(x: number, y: number, char: string, fg = '#fafaf9', bg = '#171717', bold = false): void {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
-    if (!this.cells[y]) return; // safety
+    if (!this.cells[y]) return;
     this.cells[y][x] = { char: char[0] ?? ' ', fg, bg, bold };
     this._dirty = true;
   }
@@ -195,37 +265,51 @@ export class Screen {
   /** Flush the buffer to the terminal (delta rendering — only changed cells) */
   flush(): void {
     if (!this._dirty) return;
-    for (let y = 0; y < this.height; y++) {
-      for (let x = 0; x < this.width; x++) {
-        const cell = this.cells[y][x];
-        const prev = this.prevCells[y]?.[x];
-        if (prev && cell.char === prev.char && cell.fg === prev.fg && cell.bg === prev.bg && cell.bold === prev.bold) {
-          continue; // No change
+
+    if (!this.headless) {
+      const t = getTerm();
+      for (let y = 0; y < this.height; y++) {
+        for (let x = 0; x < this.width; x++) {
+          const cell = this.cells[y][x];
+          const prev = this.prevCells[y]?.[x];
+          if (prev && cell.char === prev.char && cell.fg === prev.fg && cell.bg === prev.bg && cell.bold === prev.bold) {
+            continue;
+          }
+          t.moveTo(x + 1, y + 1);
+          const [fr, fg, fb] = hexToRgb(cell.fg);
+          const [br, bg, bb] = hexToRgb(cell.bg);
+          if (cell.bold) t.bold();
+          t.colorRgb(fr, fg, fb);
+          t.bgColorRgb(br, bg, bb);
+          t(cell.char);
+          if (cell.bold) t.styleReset();
         }
-        term.moveTo(x + 1, y + 1); // terminal-kit is 1-indexed
-        const [fr, fg, fb] = hexToRgb(cell.fg);
-        const [br, bg, bb] = hexToRgb(cell.bg);
-        if (cell.bold) term.bold();
-        term.colorRgb(fr, fg, fb);
-        term.bgColorRgb(br, bg, bb);
-        term(cell.char);
-        if (cell.bold) term.styleReset();
       }
     }
+
     // Swap buffers
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        this.prevCells[y][x] = { ...this.cells[y][x] };
+        if (this.prevCells[y]) {
+          this.prevCells[y][x] = { ...this.cells[y][x] };
+        }
       }
     }
     this._dirty = false;
+
+    // Notify headless observer
+    if (this._onFlush) {
+      this._onFlush(this.dumpText());
+    }
   }
 
   /** Force full redraw (clears delta cache) */
   forceRedraw(): void {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        this.prevCells[y][x] = { ...EMPTY_CELL, char: '\0' }; // Force mismatch
+        if (this.prevCells[y]) {
+          this.prevCells[y][x] = { ...EMPTY_CELL, char: '\0' };
+        }
       }
     }
     this._dirty = true;
@@ -233,8 +317,9 @@ export class Screen {
 
   // ── Utility ───────────────────────────────────────────────────────────
 
-  /** Sleep for ms milliseconds */
+  /** Sleep for ms milliseconds (instant in headless mode) */
   sleep(ms: number): Promise<void> {
+    if (this.headless) return Promise.resolve(); // Skip delays in headless
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

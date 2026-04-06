@@ -28,9 +28,9 @@ function makeBlessingRuntime(b: Blessing, owner: 'player' | 'boss'): BlessingRun
   };
 }
 
-export async function startTuiGame(): Promise<void> {
-  const screen = new Screen();
-  screen.start();
+export async function startTuiGame(existingScreen?: Screen): Promise<void> {
+  const screen = existingScreen ?? new Screen();
+  if (!existingScreen) screen.start();
 
   try {
     const content = buildStubDailyContent();

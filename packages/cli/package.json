@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "play": "tsx src/play-tui.ts",
+    "play:headless": "tsx src/play-headless.ts",
     "play:classic": "tsx src/index.ts",
     "simulate": "tsx src/simulate.ts",
     "typecheck": "tsc --noEmit"

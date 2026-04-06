@@ -195,8 +195,16 @@ function drawBlessingBar(
 function drawLog(
   screen: Screen, L: ReturnType<typeof layout>,
   events: string[],
+  turnNumber: number,
+  whoseTurn?: string,
 ): void {
   screen.hline(L.pad, L.logY, L.w - L.pad * 2, '─', C.border);
+  // Turn indicator in log header
+  const turnLabel = whoseTurn
+    ? `Turn ${turnNumber} -- ${whoseTurn}`
+    : `Turn ${turnNumber}`;
+  screen.text(L.pad + 1, L.logY, ` ${turnLabel} `, C.dim, C.bg);
+
   const maxLines = L.logH;
   const recent = events.slice(-maxLines);
   for (let i = 0; i < recent.length; i++) {
@@ -216,33 +224,42 @@ function drawActionMenu(
   abilities: Ability[],
   playerMp: number,
   isPlayerTurn: boolean,
+  playerName: string,
 ): void {
   screen.hline(L.pad, L.menuY, L.w - L.pad * 2, '═', isPlayerTurn ? C.player : C.border);
   if (isPlayerTurn) {
-    screen.text(L.pad, L.menuY, ' YOUR TURN ', C.player, C.bg, true);
+    screen.text(L.pad, L.menuY, ` ${playerName}'s turn `, C.player, C.bg, true);
   }
 
   if (!isPlayerTurn) {
-    screen.text(L.pad + 2, L.menuY + 1, 'Waiting...', C.dim);
+    screen.text(L.pad + 2, L.menuY + 1, 'Enemy is acting...', C.dim);
     return;
   }
 
-  let x = L.pad;
-  const y = L.menuY + 1;
+  // Render abilities in a grid that wraps properly
+  const maxLabelW = 24; // max width per ability label
+  const colW = maxLabelW + 2;
+  const cols = Math.max(2, Math.floor((L.w - L.pad * 2) / colW));
+  const allOptions: { label: string; canUse: boolean }[] = [];
+
   for (let i = 0; i < abilities.length; i++) {
     const a = abilities[i];
     const canUse = playerMp >= a.mpCost && !a.lockedForCombat && !(a.currentCooldown && a.currentCooldown > 0);
-    const fg = canUse ? C.selected : C.dim;
-    const label = `[${i + 1}] ${a.name} ${a.mpCost}MP`;
-    screen.text(x, y, label, fg);
-    x += label.length + 3;
-    if (x > L.w - 30) { x = L.pad; /* overflow to next line if needed */ }
+    allOptions.push({ label: `[${i + 1}] ${a.name.slice(0, 14)} ${a.mpCost}MP`, canUse });
   }
-  screen.text(x, y, `[${abilities.length + 1}] Defend`, C.selected);
-  screen.text(x + 12, y, `[${abilities.length + 2}] Items`, C.selected);
+  allOptions.push({ label: `[${abilities.length + 1}] Defend 0MP`, canUse: true });
+  allOptions.push({ label: `[${abilities.length + 2}] Items`, canUse: true });
 
-  // Descriptions on next line
-  screen.text(L.pad, L.menuY + 2, 'Press a number to act. Defend restores 8 MP + 5 HP.', C.dim);
+  for (let i = 0; i < allOptions.length; i++) {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const opt = allOptions[i];
+    screen.text(L.pad + col * colW, L.menuY + 1 + row, opt.label, opt.canUse ? C.selected : C.dim);
+  }
+
+  // Hint on the line after all options
+  const menuRows = Math.ceil(allOptions.length / cols);
+  screen.text(L.pad, L.menuY + 1 + menuRows, `MP: ${playerMp}  |  Press a number key to act.`, C.dim);
 }
 
 // ── Main combat runner ──────────────────────────────────────────────────
@@ -330,8 +347,10 @@ export async function runCombatScene(
     drawBattleArea(screen, L, playerEntity, allEnemies, playerPalette);
     drawStatusPanel(screen, L, playerEntity, allEnemies);
     drawBlessingBar(screen, L, playerBlessing, blessingText, bossBlessing, bossText);
-    drawLog(screen, L, turnEvents.length > 0 ? turnEvents : logLines.slice(-L.logH));
-    drawActionMenu(screen, L, playerEntity.abilities, playerEntity.stats.mp, showMenu);
+    const currentEntity = getCurrentEntity(combat);
+    const whoseTurn = currentEntity?.name ?? '';
+    drawLog(screen, L, turnEvents.length > 0 ? turnEvents : logLines.slice(-L.logH), combat.turnNumber, whoseTurn);
+    drawActionMenu(screen, L, playerEntity.abilities, playerEntity.stats.mp, showMenu, playerEntity.name);
 
     // CRT scanlines
     applyScanlines(screen);
