@@ -22,6 +22,7 @@ export interface TurnEvent {
   value?: number;
   statusId?: string;
   details: string;
+  crit?: boolean;
 }
 
 export type EntityMap = Map<string, Entity>;
@@ -91,11 +92,13 @@ function checkCondition(
   }
 }
 
+const CRIT_MULTIPLIER = 1.5;
+
 function calcDamage(
   effect: SpellEffect,
   caster: Entity,
   rng?: SeededRNG,
-): number {
+): { damage: number; isCrit: boolean } {
   let dmg = effect.base ?? 0;
   if (effect.scaling) {
     const statVal = caster.stats[effect.scaling.stat as keyof typeof caster.stats] as number;
@@ -104,7 +107,19 @@ function calcDamage(
   if (effect.variance && rng) {
     dmg += rng.nextInt(-effect.variance, effect.variance);
   }
-  return Math.max(1, Math.round(dmg));
+
+  // Crit check: luck / (luck + 20) = crit chance
+  // luck 3 = 13%, luck 6 = 23%, luck 10 = 33%
+  let isCrit = false;
+  if (rng) {
+    const critChance = caster.stats.luck / (caster.stats.luck + 20);
+    if (rng.next() < critChance) {
+      dmg = Math.round(dmg * CRIT_MULTIPLIER);
+      isCrit = true;
+    }
+  }
+
+  return { damage: Math.max(1, Math.round(dmg)), isCrit };
 }
 
 function calcHeal(effect: SpellEffect, caster: Entity, rng?: SeededRNG): number {
@@ -190,14 +205,16 @@ export function resolveSpellEffect(
 
     switch (effect.type) {
       case 'damage': {
-        const raw = calcDamage(effect, caster, rng);
+        const { damage: raw, isCrit } = calcDamage(effect, caster, rng);
         const dealt = applyDamage(target, raw);
+        const critTag = isCrit ? ' CRITICAL HIT!' : '';
         events.push({
           type: 'damage',
           sourceId: caster.id,
           targetId: target.id,
           value: dealt,
-          details: `${caster.name} deals ${dealt} damage to ${target.name}${effect.element ? ` (${effect.element})` : ''}.`,
+          crit: isCrit,
+          details: `${caster.name} deals ${dealt} damage to ${target.name}${effect.element ? ` (${effect.element})` : ''}.${critTag}`,
         });
         if (target.stats.hp <= 0) {
           events.push({ type: 'entity_defeated', targetId: target.id, details: `${target.name} is defeated!` });
@@ -219,16 +236,18 @@ export function resolveSpellEffect(
       }
 
       case 'drain': {
-        const raw = calcDamage(effect, caster, rng);
+        const { damage: raw, isCrit } = calcDamage(effect, caster, rng);
         const dealt = applyDamage(target, raw);
         const healed = Math.round(dealt * (effect.drainRatio ?? 0.5));
         const actualHeal = applyHeal(caster, healed);
+        const critTag = isCrit ? ' CRITICAL HIT!' : '';
         events.push({
           type: 'damage',
           sourceId: caster.id,
           targetId: target.id,
           value: dealt,
-          details: `${caster.name} drains ${dealt} from ${target.name}, recovering ${actualHeal} HP.`,
+          crit: isCrit,
+          details: `${caster.name} drains ${dealt} from ${target.name}, recovering ${actualHeal} HP.${critTag}`,
         });
         // Emit a separate heal event so ON_HEAL triggers fire
         if (actualHeal > 0) {

@@ -249,12 +249,14 @@ export async function runCombatScene(
   }
 
   // Process one turn — shows action events, then blessing resolution with loading state
-  async function doTurn(action: PlayerAction | null): Promise<{ events: string[]; blessingFired: boolean }> {
+  async function doTurn(action: PlayerAction | null): Promise<{ events: string[]; blessingFired: boolean; hadCrit: boolean }> {
     const events: string[] = [];
+    let hadCrit = false;
     const result = processTurn(combat, action, rng);
     for (const ev of result.events) {
       logLines.push(ev.details);
       events.push(ev.details);
+      if (ev.crit) hadCrit = true;
     }
 
     // If there are pending blessing triggers, show the action events FIRST
@@ -268,7 +270,7 @@ export async function runCombatScene(
 
     const narrations = await processTriggers();
     events.push(...narrations);
-    return { events, blessingFired: narrations.length > 0 };
+    return { events, blessingFired: narrations.length > 0, hadCrit };
   }
 
   // Full render
@@ -367,7 +369,8 @@ export async function runCombatScene(
     // Wrap all log lines, then take the most recent that fit
     const wrappedLines: { text: string; color: string }[] = [];
     for (const line of eventsToShow) {
-      const color = line.includes('damage') || line.includes('defeated') || line.includes('deals') ? C.hpLow
+      const color = line.includes('CRITICAL HIT') ? C.gold
+        : line.includes('damage') || line.includes('defeated') || line.includes('deals') ? C.hpLow
         : line.includes('recover') || line.includes('heal') || line.includes('Regen') ? C.success
         : line.startsWith('*') || line.startsWith('x') ? C.blessing
         : line.includes('gains') || line.includes('fades') ? C.dim
@@ -422,8 +425,12 @@ export async function runCombatScene(
 
   // Process enemy turns first if they're faster
   while (!isPlayerTurn(combat) && combat.status === 'active') {
-    const { events, blessingFired } = await doTurn(null);
+    const { events, blessingFired, hadCrit } = await doTurn(null);
     render(events, false, blessingFired);
+    if (hadCrit) {
+      await screenShake(screen, 2, 200);
+      render(events, false, blessingFired);
+    }
     await screen.sleep(600);
   }
 
@@ -483,15 +490,17 @@ export async function runCombatScene(
     }
 
     // Process player action
-    const playerResult = await doTurn(action);
+    const playerResult = await doTurn(action!);
     render(playerResult.events, false, playerResult.blessingFired);
 
-    // Brief pause to see results
-    if (playerResult.events.some((e) => e.includes('damage') || e.includes('defeated'))) {
-      await screen.sleep(300);
-    } else {
-      await screen.sleep(200);
+    // Crit animation on player crit
+    if (playerResult.hadCrit) {
+      await flashRegion(screen, 0, 0, screen.width, L.contentStartY, '#fbbf24', 120);
+      render(playerResult.events, false, playerResult.blessingFired);
     }
+
+    // Brief pause
+    await screen.sleep(playerResult.events.some((e) => e.includes('damage') || e.includes('defeated')) ? 300 : 200);
 
     if (combat.status !== 'active') break;
 
@@ -500,8 +509,11 @@ export async function runCombatScene(
       const enemyResult = await doTurn(null);
       render(enemyResult.events, false, enemyResult.blessingFired);
 
-      // Shake if player took damage
-      if (enemyResult.events.some((e) => e.includes('damage') && e.includes(player.name))) {
+      // Crit animation on enemy crit — shake harder
+      if (enemyResult.hadCrit) {
+        await screenShake(screen, 2, 250);
+        render(enemyResult.events, false, enemyResult.blessingFired);
+      } else if (enemyResult.events.some((e) => e.includes('damage') && e.includes(player.name))) {
         await screenShake(screen, 1, 150);
         render(enemyResult.events, false, enemyResult.blessingFired);
       }
