@@ -4,6 +4,7 @@ import type {
   CharacterArchetype,
   Blessing,
   Item,
+  FloorMap,
   MapNode,
 } from '@manyworlds/shared';
 import type { BlessingRuntime, AdjudicationRequest } from '@manyworlds/shared';
@@ -89,6 +90,107 @@ function labelEntities(entities: Entity[]): string[] {
     }
     return e.name;
   });
+}
+
+// ── ASCII map rendering ──────────────────────────────────────────────────────
+
+function nodeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    combat: 'COMBAT', elite: 'ELITE!', boss: '-BOSS-',
+    rest: ' REST ', shop: ' SHOP ', event: 'EVENT?',
+  };
+  return labels[type] ?? type.toUpperCase();
+}
+
+function nodeColor(type: string): string {
+  const colors: Record<string, string> = {
+    combat: COLORS.fg, elite: COLORS.warning, boss: COLORS.hpLow,
+    rest: COLORS.success, shop: COLORS.gold, event: COLORS.blessing,
+  };
+  return colors[type] ?? COLORS.fg;
+}
+
+function renderAsciiMap(map: FloorMap, visitedIds: string[], frontierIds: string[]): void {
+  const visited = new Set(visitedIds);
+  const frontier = new Set(frontierIds);
+  const currentId = visitedIds[visitedIds.length - 1];
+
+  // Group nodes by row
+  const rowMap = new Map<number, MapNode[]>();
+  for (const node of map.nodes) {
+    const arr = rowMap.get(node.row) ?? [];
+    arr.push(node);
+    rowMap.set(node.row, arr);
+  }
+  const rows = [...rowMap.entries()].sort((a, b) => b[0] - a[0]); // top = boss
+  const maxCols = Math.max(...[...rowMap.values()].map((r) => r.length));
+  const cellW = 10;
+
+  // Build edge lookup
+  const edgesFrom = new Map<string, Set<string>>();
+  for (const [from, to] of map.edges) {
+    const s = edgesFrom.get(from) ?? new Set();
+    s.add(to);
+    edgesFrom.set(from, s);
+  }
+
+  for (let ri = 0; ri < rows.length; ri++) {
+    const [, rowNodes] = rows[ri];
+    const pad = ' '.repeat(Math.max(0, Math.floor((maxCols - rowNodes.length) / 2) * cellW));
+
+    // Node line
+    const parts = rowNodes.map((node) => {
+      const label = nodeLabel(node.type);
+      const color = nodeColor(node.type);
+      const isCurrent = node.id === currentId;
+      const isFrontier = frontier.has(node.id);
+      const isVisited = visited.has(node.id);
+
+      if (isCurrent) {
+        return colorize(`[${label}]`, COLORS.player, true) + '  ';
+      } else if (isFrontier) {
+        return colorize(`[${label}]`, color, true) + '  ';
+      } else if (isVisited) {
+        return colorize(` ${label} `, COLORS.fgDim) + '  ';
+      } else {
+        return colorize(` ${label} `, COLORS.border) + '  ';
+      }
+    });
+    print(`  ${pad}${parts.join('')}`);
+
+    // Connection lines to next row
+    if (ri < rows.length - 1) {
+      const [, nextNodes] = rows[ri + 1];
+      const nextPad = Math.floor((maxCols - nextNodes.length) / 2) * cellW;
+      const thispad = Math.floor((maxCols - rowNodes.length) / 2) * cellW;
+      const lineW = maxCols * cellW + 10;
+      const chars: string[] = new Array(lineW).fill(' ');
+
+      for (const node of rowNodes) {
+        const col = rowNodes.indexOf(node);
+        const center = thispad + col * cellW + 4;
+        const targets = edgesFrom.get(node.id);
+        if (!targets) continue;
+        for (const tid of targets) {
+          const tn = nextNodes.find((n) => n.id === tid);
+          if (!tn) continue;
+          const tc = nextNodes.indexOf(tn);
+          const tcenter = nextPad + tc * cellW + 4;
+          if (center === tcenter) {
+            chars[center] = '|';
+          } else if (center < tcenter) {
+            chars[center] = '\\';
+            for (let c = center + 1; c < tcenter; c++) if (chars[c] === ' ') chars[c] = '-';
+          } else {
+            chars[tcenter] = '/';
+            for (let c = tcenter + 1; c < center; c++) if (chars[c] === ' ') chars[c] = '-';
+          }
+        }
+      }
+      const isWalked = rowNodes.some((n) => visited.has(n.id));
+      print(`  ${colorize(chars.join('').trimEnd(), isWalked ? COLORS.fgDim : COLORS.border)}`);
+    }
+  }
 }
 
 function formatEvent(ev: TurnEvent): string {
@@ -244,42 +346,30 @@ async function runMapLoop(state: RunState): Promise<void> {
     print(header('T H E   M A P'));
     printBlank();
 
-    // Show visited path
-    print(colorize('  Journey so far:', COLORS.fgDim));
-    for (const nid of state.visitedNodeIds) {
-      const node = content.map.nodes.find((n) => n.id === nid);
-      if (node) {
-        print(colorize(`    > Row ${node.row}: ${node.type.toUpperCase()}`, COLORS.fgDim));
-      }
-    }
+    // Player stats
+    print(`  ${colorize(state.player.name, COLORS.player, true)} Lv${state.player.level}`);
+    print(`  ${colorize('HP', COLORS.hp)} ${progressBar(state.player.stats.hp, state.player.stats.maxHp, 16)}  ${colorize('MP', COLORS.mp)} ${progressBar(state.player.stats.mp, state.player.stats.maxMp, 12, COLORS.mp)}`);
+    print(`  ${colorize('Gold:', COLORS.gold)} ${state.gold}  ${colorize('EXP:', COLORS.info)} ${state.player.exp}`);
     printBlank();
 
-    // Show gold
-    print(`  ${colorize('Gold:', COLORS.gold)} ${state.gold}`);
-    print(`  ${colorize('Level:', COLORS.fg)} ${state.player.level}  ${colorize('EXP:', COLORS.info)} ${state.player.exp}`);
-    print(`  ${colorize('HP:', COLORS.hp)} ${state.player.stats.hp}/${state.player.stats.maxHp}  ${colorize('MP:', COLORS.mp)} ${state.player.stats.mp}/${state.player.stats.maxMp}`);
+    // ASCII map
+    renderAsciiMap(content.map, state.visitedNodeIds, frontier);
     printBlank();
 
-    // Show choices
+    // Numbered choices for frontier nodes
+    const frontierNodes = frontier.map((id) => content.map.nodes.find((n) => n.id === id)!).filter(Boolean);
     print(colorize('  Choose your path:', COLORS.fg, true));
     printBlank();
-    const frontierNodes = frontier.map((id) => content.map.nodes.find((n) => n.id === id)!).filter(Boolean);
-
-    const typeIcons: Record<string, string> = {
-      combat: 'x COMBAT — Enemies ahead', elite: '! ELITE — Dangerous foe, better rewards',
-      boss: '# BOSS — The final challenge', rest: '+ REST — Recover HP and MP',
-      shop: '$ SHOP — Spend gold on supplies', event: '? EVENT — An encounter of fate',
+    const typeDescs: Record<string, string> = {
+      combat: 'Enemies ahead', elite: 'Dangerous foe, better rewards',
+      boss: 'The final challenge', rest: 'Recover HP and MP',
+      shop: 'Spend gold on supplies', event: 'An encounter of fate',
     };
     for (let i = 0; i < frontierNodes.length; i++) {
       const node = frontierNodes[i];
-      const typeColor =
-        node.type === 'boss' ? COLORS.enemy :
-        node.type === 'elite' ? COLORS.warning :
-        node.type === 'rest' ? COLORS.success :
-        node.type === 'shop' ? COLORS.gold :
-        node.type === 'event' ? COLORS.blessing :
-        COLORS.fg;
-      print(`  ${colorize(`[${i + 1}]`, COLORS.selected)} ${colorize(typeIcons[node.type] ?? node.type.toUpperCase(), typeColor)}`);
+      const typeColor = nodeColor(node.type);
+      const label = nodeLabel(node.type);
+      print(`  ${colorize(`[${i + 1}]`, COLORS.selected)} ${colorize(label, typeColor)} ${colorize(`— ${typeDescs[node.type] ?? ''}`, COLORS.fgDim)}`);
     }
     printBlank();
 
