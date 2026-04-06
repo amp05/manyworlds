@@ -52,18 +52,24 @@ function layout(screen: IScreen) {
 
 // ── Status descriptions ─────────────────────────────────────────────────
 
-const STATUS_DESC: Record<string, string> = {
-  'Burning': 'fire dmg/turn',
-  'Poison': 'poison dmg/turn',
-  'Frostbite': 'ice dmg + slow',
-  'Soaked': 'defense down',
-  'Defense Down': 'defense down',
-  'Regen': 'heals/turn',
-  'Invulnerable': 'immune to damage',
-  'Attack Up': 'attack boosted',
-  'Shield': 'absorbs damage',
-  'Slowed': 'speed reduced',
-};
+/** Build a human-readable description from the actual status data */
+function describeStatus(s: { name: string; type: string; stat?: string; modifier?: number; modifierPct?: number; damagePerTurn?: number; healPerTurn?: number; duration: number }): string {
+  const parts: string[] = [];
+  if (s.damagePerTurn && s.damagePerTurn > 0) parts.push(`${s.damagePerTurn} dmg/turn`);
+  if (s.healPerTurn && s.healPerTurn > 0) parts.push(`+${s.healPerTurn} HP/turn`);
+  if (s.stat && s.modifier) {
+    const sign = s.modifier > 0 ? '+' : '';
+    parts.push(`${sign}${s.modifier} ${s.stat}`);
+  }
+  if (s.stat && s.modifierPct) {
+    const sign = s.modifierPct > 0 ? '+' : '';
+    parts.push(`${sign}${Math.round(s.modifierPct * 100)}% ${s.stat}`);
+  }
+  if (s.name === 'Invulnerable') parts.push('immune to damage');
+  if (s.name === 'Shield') parts.push('absorbs damage');
+  if (parts.length === 0) return s.name;
+  return parts.join(', ');
+}
 
 /** Word-wrap text to fit within maxWidth. Returns array of lines. */
 function wrapText(text: string, maxWidth: number): string[] {
@@ -136,6 +142,52 @@ function drawBattleArea(
 }
 
 
+/** Show a full stat screen for enemies */
+async function showInspect(screen: IScreen, L: ReturnType<typeof layout>, enemies: Entity[]): Promise<void> {
+  screen.clear();
+  screen.box(0, 0, screen.width, screen.height, C.border);
+  screen.centerText(1, '=== INSPECT ENEMIES ===', C.info, C.bg, true);
+  let y = 3;
+  for (const e of enemies) {
+    screen.text(L.pad, y, e.name, C.enemy, C.bg, true);
+    screen.text(L.pad + 24, y, `Lv${e.level}`, C.dim);
+    y += 1;
+    screen.text(L.pad + 2, y, `HP ${e.stats.hp}/${e.stats.maxHp}`, C.hp);
+    screen.text(L.pad + 18, y, `MP ${e.stats.mp}/${e.stats.maxMp}`, C.mp);
+    y += 1;
+    screen.text(L.pad + 2, y, `ATK ${e.stats.attack}`, C.fire);
+    screen.text(L.pad + 12, y, `DEF ${e.stats.defense}`, C.earth);
+    screen.text(L.pad + 22, y, `SPD ${e.stats.speed}`, C.player);
+    screen.text(L.pad + 32, y, `LCK ${e.stats.luck}`, C.gold);
+    y += 1;
+    if (e.abilities.length > 0) {
+      screen.text(L.pad + 2, y, 'Abilities:', C.dim);
+      y += 1;
+      for (const a of e.abilities) {
+        screen.text(L.pad + 4, y, `${a.name} (${a.mpCost}MP)`, C.selected);
+        screen.text(L.pad + 30, y, a.description.slice(0, screen.width - L.pad - 32), C.dim);
+        y += 1;
+      }
+    }
+    if (e.statuses.length > 0) {
+      screen.text(L.pad + 2, y, 'Status effects:', C.dim);
+      y += 1;
+      for (const s of e.statuses) {
+        const desc = describeStatus(s as any);
+        screen.text(L.pad + 4, y, `${s.name} (${s.duration}t)`, s.type === 'buff' ? C.success : C.hpLow);
+        screen.text(L.pad + 24, y, desc, C.dim);
+        y += 1;
+      }
+    }
+    y += 1;
+    screen.hline(L.pad, y, screen.width - L.pad * 2, '─', C.border);
+    y += 1;
+  }
+  screen.centerText(screen.height - 2, '[ Press any key to return ]', C.dim);
+  screen.flush();
+  await screen.waitKey();
+}
+
 export interface CombatSceneResult {
   outcome: 'victory' | 'defeat';
   expGained: number;
@@ -196,7 +248,7 @@ export async function runCombatScene(
     return narrations;
   }
 
-  // Process one turn, return events
+  // Process one turn — shows action events, then blessing resolution with loading state
   async function doTurn(action: PlayerAction | null): Promise<{ events: string[]; blessingFired: boolean }> {
     const events: string[] = [];
     const result = processTurn(combat, action, rng);
@@ -204,6 +256,16 @@ export async function runCombatScene(
       logLines.push(ev.details);
       events.push(ev.details);
     }
+
+    // If there are pending blessing triggers, show the action events FIRST
+    // with a "blessing resolving" indicator, THEN do the LLM call
+    const hasTriggers = combat.pendingTriggers.length > 0;
+    if (hasTriggers) {
+      const waitEvents = [...events, '', '  . . . a blessing stirs . . .'];
+      render(waitEvents, false, true);
+      await screen.sleep(400);
+    }
+
     const narrations = await processTriggers();
     events.push(...narrations);
     return { events, blessingFired: narrations.length > 0 };
@@ -222,7 +284,7 @@ export async function runCombatScene(
     // ── Flowing content below battle area ──
     let y = L.contentStartY;
 
-    // Enemy bars (compact: 1 row each, statuses inline)
+    // Enemy bars with detailed statuses
     const labels = labelEntities(allEnemies);
     for (let i = 0; i < allEnemies.length; i++) {
       const e = allEnemies[i];
@@ -233,18 +295,21 @@ export async function runCombatScene(
       screen.text(L.pad + 22, y, `Lv${e.level} HP `, C.dim);
       screen.bar(L.pad + 30, y, 14, e.stats.hp, e.stats.maxHp, hpColor);
       screen.text(L.pad + 45, y, ` ${e.stats.hp}/${e.stats.maxHp}`, C.dim);
-      // Inline statuses
       if (e.statuses.length > 0) {
-        const statusStr = e.statuses.map((s) => `${s.name}(${s.duration}t)`).join(' ');
-        screen.text(L.pad + 4, y + 1, statusStr, e.statuses[0].type === 'buff' ? C.success : C.hpLow);
-        y += 2;
+        y += 1;
+        for (const s of e.statuses) {
+          const desc = describeStatus(s as any);
+          screen.text(L.pad + 4, y, `${s.name}(${s.duration}t)`, s.type === 'buff' ? C.success : C.hpLow);
+          screen.text(L.pad + 4 + s.name.length + 5, y, desc, C.dim);
+          y += 1;
+        }
       } else {
         y += 1;
       }
     }
-    y += 1; // gap
+    y += 1;
 
-    // Player bar
+    // Player bar + stats
     const p = playerEntity;
     const phpPct = p.stats.hp / p.stats.maxHp;
     const phpColor = phpPct < 0.25 ? C.hpLow : phpPct < 0.5 ? C.hpMid : C.hp;
@@ -257,13 +322,16 @@ export async function runCombatScene(
     screen.bar(L.pad + 30, y, 14, p.stats.mp, p.stats.maxMp, C.mp);
     screen.text(L.pad + 45, y, ` ${p.stats.mp}/${p.stats.maxMp}`, C.dim);
     y += 1;
-    if (p.statuses.length > 0) {
-      for (const s of p.statuses) {
-        const desc = STATUS_DESC[s.name] ?? '';
-        screen.text(L.pad + 4, y, `${s.name}(${s.duration}t)`, s.type === 'buff' ? C.success : C.hpLow);
-        if (desc) screen.text(L.pad + 4 + s.name.length + 5, y, desc, C.dim);
-        y += 1;
-      }
+    // Player combat stats
+    screen.text(L.pad + 4, y, `ATK ${p.stats.attack}`, C.fire);
+    screen.text(L.pad + 14, y, `DEF ${p.stats.defense}`, C.earth);
+    screen.text(L.pad + 24, y, `SPD ${p.stats.speed}`, C.player);
+    y += 1;
+    for (const s of p.statuses) {
+      const desc = describeStatus(s as any);
+      screen.text(L.pad + 4, y, `${s.name}(${s.duration}t)`, s.type === 'buff' ? C.success : C.hpLow);
+      screen.text(L.pad + 4 + s.name.length + 5, y, desc, C.dim);
+      y += 1;
     }
 
     // ── Blessing bar ──
@@ -327,15 +395,17 @@ export async function runCombatScene(
         const canUse = playerEntity.stats.mp >= a.mpCost && !a.lockedForCombat && !(a.currentCooldown && a.currentCooldown > 0);
         allOptions.push({ label: `[${i + 1}] ${a.name} ${a.mpCost}MP`, canUse });
       }
-      allOptions.push({ label: `[${playerEntity.abilities.length + 1}] Defend 0MP`, canUse: true });
-      allOptions.push({ label: `[${playerEntity.abilities.length + 2}] Items`, canUse: true });
+      const n = playerEntity.abilities.length;
+      allOptions.push({ label: `[${n + 1}] Defend 0MP`, canUse: true });
+      allOptions.push({ label: `[${n + 2}] Items`, canUse: true });
+      allOptions.push({ label: `[${n + 3}] Inspect`, canUse: true });
       for (let i = 0; i < allOptions.length; i++) {
         const row = Math.floor(i / cols);
         const col = i % cols;
         screen.text(L.pad + col * colW, L.menuY + 1 + row, allOptions[i].label, allOptions[i].canUse ? C.selected : C.dim);
       }
       const menuRows = Math.ceil(allOptions.length / cols);
-      screen.text(L.pad, L.menuY + 1 + menuRows, `MP: ${playerEntity.stats.mp}  |  Press a number key to act.`, C.dim);
+      screen.text(L.pad, L.menuY + 1 + menuRows, `MP: ${playerEntity.stats.mp}  |  Choose action. [0] cancels submenus.`, C.dim);
     } else {
       screen.text(L.pad + 2, L.menuY + 1, 'Enemy is acting...', C.dim);
     }
@@ -359,45 +429,57 @@ export async function runCombatScene(
 
   // Main combat loop
   while (combat.status === 'active') {
-    // Player turn — show menu
-    render([], true);
-    const playerEntity = combat.entities.find((e) => e.isPlayer)!;
-    const numAbilities = playerEntity.abilities.length;
+    // Player turn — show menu and get input (with cancel support)
+    let action: PlayerAction | null = null;
+    while (action === null) {
+      render([], true);
+      const playerEntity = combat.entities.find((e) => e.isPlayer)!;
+      const numAbilities = playerEntity.abilities.length;
+      // Menu: [1..N] abilities, [N+1] Defend, [N+2] Items, [N+3] Inspect
+      const totalOptions = numAbilities + 3;
 
-    // Get player input
-    let action: PlayerAction;
-    const choice = await screen.waitNumber(numAbilities + 2);
-    if (choice === 0) choice; // ignore escape for now
+      const choice = await screen.waitNumber(totalOptions);
+      if (choice === 0) continue; // Escape — just redraw menu
 
-    if (choice >= 1 && choice <= numAbilities) {
-      const ability = playerEntity.abilities[choice - 1];
-      if (ability.effect.target === 'single_enemy' && combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0).length > 1) {
-        // Target selection
-        const liveEnemies = combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0);
-        const labels = labelEntities(liveEnemies);
-        screen.text(L.pad, L.menuY + 2, 'Choose target: ' + labels.map((l, i) => `[${i + 1}] ${l}`).join('  '), C.fg);
+      if (choice >= 1 && choice <= numAbilities) {
+        const ability = playerEntity.abilities[choice - 1];
+        // Check if ability is usable
+        if (playerEntity.stats.mp < ability.mpCost || ability.lockedForCombat || (ability.currentCooldown && ability.currentCooldown > 0)) {
+          continue; // Can't use — redraw
+        }
+        if (ability.effect.target === 'single_enemy' && combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0).length > 1) {
+          // Target selection with cancel
+          const liveEnemies = combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0);
+          const tLabels = labelEntities(liveEnemies);
+          screen.text(L.pad, L.menuY + 2, 'Target: ' + tLabels.map((l, i) => `[${i + 1}] ${l}`).join('  ') + '  [0] Cancel', C.fg);
+          screen.flush();
+          const target = await screen.waitNumber(liveEnemies.length);
+          if (target === 0) continue; // Cancel — back to menu
+          action = { type: 'ability', abilityId: ability.id, targetId: liveEnemies[target - 1].id };
+        } else {
+          action = { type: 'ability', abilityId: ability.id };
+        }
+      } else if (choice === numAbilities + 1) {
+        action = { type: 'defend' };
+      } else if (choice === numAbilities + 2) {
+        // Items with cancel
+        const consumables = playerEntity.inventory.filter((i) => i.type === 'consumable' && i.quantity > 0);
+        if (consumables.length === 0) {
+          screen.text(L.pad, L.menuY + 2, 'No items. Press any key.', C.dim);
+          screen.flush();
+          await screen.waitKey();
+          continue;
+        }
+        screen.text(L.pad, L.menuY + 2, consumables.map((item, i) => `[${i + 1}] ${item.name} x${item.quantity}`).join('  ') + '  [0] Cancel', C.fg);
         screen.flush();
-        const target = await screen.waitNumber(liveEnemies.length);
-        action = { type: 'ability', abilityId: ability.id, targetId: liveEnemies[(target || 1) - 1].id };
-      } else {
-        action = { type: 'ability', abilityId: ability.id };
+        const ic = await screen.waitNumber(consumables.length);
+        if (ic === 0) continue; // Cancel
+        action = { type: 'item', itemId: consumables[ic - 1].id };
+      } else if (choice === numAbilities + 3) {
+        // Inspect enemies
+        await showInspect(screen, L, combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0));
+        continue; // Back to menu after inspect
       }
-    } else if (choice === numAbilities + 1) {
-      action = { type: 'defend' };
-    } else {
-      // Items
-      const consumables = playerEntity.inventory.filter((i) => i.type === 'consumable' && i.quantity > 0);
-      if (consumables.length === 0) {
-        screen.text(L.pad, L.menuY + 2, 'No items available. Press any key.', C.dim);
-        screen.flush();
-        await screen.waitKey();
-        continue;
-      }
-      screen.text(L.pad, L.menuY + 2, consumables.map((item, i) => `[${i + 1}] ${item.name} x${item.quantity}`).join('  ') + '  [0] Back', C.fg);
-      screen.flush();
-      const ic = await screen.waitNumber(consumables.length);
-      if (ic === 0) continue;
-      action = { type: 'item', itemId: consumables[ic - 1].id };
     }
 
     // Process player action
