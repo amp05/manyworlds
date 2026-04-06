@@ -327,58 +327,89 @@ async function runCombat(
   // Process initial triggers
   await handleBlessingTriggers(combat, state, logLines);
 
-  // Helper: process + display enemy turns one at a time
-  async function processEnemyTurns(): Promise<void> {
-    while (!isPlayerTurn(combat) && combat.status === 'active') {
-      const entity = getCurrentEntity(combat);
-      const result = processTurn(combat, null, rng);
-      for (const ev of result.events) {
-        logLines.push(ev.details);
-        print(`  ${colorize('>', COLORS.enemy)} ${formatEvent(ev)}`);
-      }
-      await handleBlessingTriggers(combat, state, logLines);
+  /** Process one turn and collect its events. Returns the events from that turn. */
+  async function processOneTurn(action: PlayerAction | null): Promise<string[]> {
+    const turnEvents: string[] = [];
+    const result = processTurn(combat, action, rng);
+    for (const ev of result.events) {
+      logLines.push(ev.details);
+      turnEvents.push(ev.details);
     }
+    // Handle blessing triggers and collect their narration
+    const triggers = [...combat.pendingTriggers];
+    combat.pendingTriggers = [];
+    for (const ctx of triggers) {
+      for (const blessing of [combat.playerBlessing, combat.bossBlessing]) {
+        if (!blessing || !blessing.triggers.includes(ctx.trigger)) continue;
+        const req = {
+          blessingId: blessing.id, blessingText: blessing.text,
+          blessingState: blessing.state, triggerContext: ctx,
+          gameState: {
+            entities: combat.entities, turnNumber: combat.turnNumber,
+            currentEntityId: combat.turnOrder[combat.currentTurnIndex] ?? 'player',
+            combatLog: logLines.slice(-10),
+          },
+        };
+        const response = await adjudicate(req);
+        const events = applyAdjudication(combat, response, blessing.owner);
+        for (const ev of events) { logLines.push(ev.details); turnEvents.push(ev.details); }
+        if (response.narration && !response.noEffect) {
+          const prefix = blessing.owner === 'player' ? '☆' : '⚔';
+          const line = `${prefix} ${response.narration}`;
+          logLines.push(line);
+          turnEvents.push(colorize(line, COLORS.blessing));
+        }
+        if (blessing.state.usedAbilities) {
+          const used = blessing.state.usedAbilities as string[];
+          for (const entity of combat.entities) {
+            for (const ability of entity.abilities) {
+              if (used.includes(ability.id)) ability.lockedForCombat = true;
+            }
+          }
+        }
+      }
+    }
+    return turnEvents;
   }
 
-  // Process initial triggers
-  await handleBlessingTriggers(combat, state, logLines);
-
-  // If enemies are faster, show their opening actions
-  if (!isPlayerTurn(combat) && combat.status === 'active') {
+  // If enemies are faster, show each enemy action one at a time
+  while (!isPlayerTurn(combat) && combat.status === 'active') {
+    const entity = getCurrentEntity(combat);
+    const turnEvents = await processOneTurn(null);
     clearScreen();
-    printBlank();
-    print(colorize('  ─── Enemy Actions ───', COLORS.enemy));
-    printBlank();
-    await processEnemyTurns();
-    if (combat.status !== 'active') {
-      // Player died from opening enemy attacks (unlikely but possible)
-      return combat.status === 'victory' ? 'victory' : 'defeat';
-    }
+    renderCombatScreen(combat, state, turnEvents, false);
     await pressEnter();
   }
 
+  // Main combat loop
   while (combat.status === 'active') {
-    // ── Show state + get player action ──
+    // ── Player's turn: show screen with menu ──
     clearScreen();
-    renderCombatScreen(combat, state, logLines);
+    renderCombatScreen(combat, state, [], true);
     const action = await getPlayerAction(combat, player);
 
-    // Process player action
-    logLines.push('───');
-    const result = processTurn(combat, action, rng);
-    for (const ev of result.events) logLines.push(ev.details);
-    await handleBlessingTriggers(combat, state, logLines);
+    // Process player action and show result
+    const playerEvents = await processOneTurn(action);
+    clearScreen();
+    renderCombatScreen(combat, state, playerEvents, false);
 
-    if (combat.status !== 'active') break;
-
-    // Process + animate enemy turns
-    printBlank();
-    print(colorize('  ─── Enemy Actions ───', COLORS.enemy));
-    printBlank();
-    await processEnemyTurns();
-
-    if (combat.status !== 'active') break;
+    if (combat.status !== 'active') {
+      await pressEnter();
+      break;
+    }
     await pressEnter();
+
+    // ── Each enemy acts one at a time ──
+    while (!isPlayerTurn(combat) && combat.status === 'active') {
+      const enemyEvents = await processOneTurn(null);
+      clearScreen();
+      renderCombatScreen(combat, state, enemyEvents, false);
+      if (combat.status !== 'active') {
+        await pressEnter();
+        break;
+      }
+      await pressEnter();
+    }
   }
 
   // ── Post-combat ──
@@ -435,8 +466,33 @@ async function runCombat(
   }
 }
 
-function renderCombatScreen(combat: CombatState, state: RunState, logLines: string[]): void {
-  const enemies = combat.entities.filter((e) => !e.isPlayer && e.stats.hp > 0);
+// ── Status effect descriptions ───────────────────────────────────────────────
+
+const STATUS_DESCRIPTIONS: Record<string, string> = {
+  'Burning': 'Takes fire damage each turn',
+  'Poison': 'Takes poison damage each turn',
+  'Frostbite': 'Takes ice damage each turn, speed reduced',
+  'Soaked': 'Defense reduced — vulnerable to attacks',
+  'Defense Down': 'Defense reduced temporarily',
+  'Regen': 'Recovers HP each turn',
+  'Evasion': 'Speed increased, harder to hit',
+  'Invulnerable': 'Cannot take damage',
+  'Attack Up': 'Attack power increased',
+  'Shield': 'Absorbs incoming damage',
+  'Slowed': 'Speed reduced temporarily',
+};
+
+function getStatusDesc(name: string): string {
+  return STATUS_DESCRIPTIONS[name] ?? '';
+}
+
+/** Render the full combat screen — entities, statuses, blessing, and recent events */
+function renderCombatScreen(
+  combat: CombatState,
+  state: RunState,
+  recentEvents: string[],
+  showMenu: boolean,
+): void {
   const allEnemies = combat.entities.filter((e) => !e.isPlayer);
   const player = combat.entities.find((e) => e.isPlayer)!;
 
@@ -448,8 +504,6 @@ function renderCombatScreen(combat: CombatState, state: RunState, logLines: stri
     renderSprite(e.stats.hp <= 0 ? 'enemy' : e.name.includes('Colossus') || e.name.includes('Leviathan') ? 'boss' : 'enemy',
       e.stats.hp <= 0 ? COLORS.fgDim : COLORS.enemy),
   );
-
-  // Render sprites side by side
   const maxHeight = Math.max(playerSprite.length, ...enemySprites.map((s) => s.length));
   for (let row = 0; row < maxHeight; row++) {
     const pLine = playerSprite[row] ?? ' '.repeat(10);
@@ -459,64 +513,76 @@ function renderCombatScreen(combat: CombatState, state: RunState, logLines: stri
 
   printSep();
 
-  // Enemy status rows
+  // Enemy status rows with descriptions
   for (const e of allEnemies) {
-    const opacity = e.stats.hp <= 0 ? COLORS.fgDim : '';
-    const nameColor = e.stats.hp <= 0 ? COLORS.fgDim : COLORS.enemy;
     print(renderEntityRow(
       e.name, Math.max(0, e.stats.hp), e.stats.maxHp, e.stats.mp, e.stats.maxMp,
       e.level, e.statuses.map((s) => ({ name: s.name, type: s.type })),
     ));
+    // Show status effect descriptions
+    for (const s of e.statuses) {
+      const desc = getStatusDesc(s.name);
+      if (desc) {
+        const c = s.type === 'buff' ? COLORS.success : COLORS.hpLow;
+        print(`    ${colorize(`${s.name}`, c)} ${colorize(`(${s.duration}t)`, COLORS.fgDim)} ${colorize(desc, COLORS.fgDim)}`);
+      }
+    }
   }
 
   printBlank();
 
-  // Player status row
+  // Player status row with descriptions
   print(renderEntityRow(
     player.name, player.stats.hp, player.stats.maxHp, player.stats.mp, player.stats.maxMp,
     player.level, player.statuses.map((s) => ({ name: s.name, type: s.type })),
     true,
   ));
+  for (const s of player.statuses) {
+    const desc = getStatusDesc(s.name);
+    if (desc) {
+      const c = s.type === 'buff' ? COLORS.success : COLORS.hpLow;
+      print(`    ${colorize(`${s.name}`, c)} ${colorize(`(${s.duration}t)`, COLORS.fgDim)} ${colorize(desc, COLORS.fgDim)}`);
+    }
+  }
 
   printBlank();
 
-  // Blessing — show full text, not just name
+  // Blessing — always show full text
   const blessingData = state.content.blessings.player.find((b) => b.id === state.blessing.id);
-  print(renderBlessingBanner(state.blessing.name, blessingData?.flavor ?? ''));
-  if (blessingData) {
-    print(`  ${colorize(blessingData.text, COLORS.fgDim)}`);
-  }
+  print(`  ${colorize(`☆ ${state.blessing.name}`, COLORS.blessing)}`);
+  if (blessingData) print(`  ${colorize(blessingData.text, COLORS.fgDim)}`);
   if (combat.bossBlessing) {
-    print(renderBlessingBanner(
-      `[BOSS] ${combat.bossBlessing.name}`,
-      state.content.blessings.boss.flavor,
-    ));
+    print(`  ${colorize(`⚔ ${combat.bossBlessing.name}`, COLORS.enemy)}`);
     print(`  ${colorize(state.content.blessings.boss.text, COLORS.fgDim)}`);
   }
 
   printBlank();
 
-  // Combat log — label this turn clearly
-  print(colorize('  ─── Combat Log ───', COLORS.border));
-  const recent = logLines.slice(-8);
-  for (const line of recent) {
-    print(`  ${colorize('>', COLORS.info)} ${line}`);
+  // Recent events from this action (not a running log — just what just happened)
+  if (recentEvents.length > 0) {
+    print(colorize('  ─── What happened ───', COLORS.border));
+    for (const line of recentEvents) {
+      print(`  ${colorize('>', COLORS.info)} ${line}`);
+    }
+    printBlank();
   }
 
   printSep();
 
-  // Ability menu
-  print(renderAbilityMenu(
-    player.abilities.map((a) => ({
-      id: a.id,
-      name: a.name,
-      mpCost: a.mpCost,
-      description: a.description,
-      locked: a.lockedForCombat,
-      cooldown: a.currentCooldown,
-    })),
-    player.stats.mp,
-  ));
+  // Ability menu (only when it's the player's turn)
+  if (showMenu) {
+    print(renderAbilityMenu(
+      player.abilities.map((a) => ({
+        id: a.id,
+        name: a.name,
+        mpCost: a.mpCost,
+        description: a.description,
+        locked: a.lockedForCombat,
+        cooldown: a.currentCooldown,
+      })),
+      player.stats.mp,
+    ));
+  }
 }
 
 async function getPlayerAction(combat: CombatState, player: Entity): Promise<PlayerAction> {
