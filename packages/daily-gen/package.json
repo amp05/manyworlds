@@ -1,0 +1,20 @@
+{
+  "name": "@manyworlds/daily-gen",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "gen": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@manyworlds/engine": "*",
+    "@manyworlds/shared": "*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "tsx": "^4.15.6",
+    "typescript": "^5.4.5"
+  }
+}

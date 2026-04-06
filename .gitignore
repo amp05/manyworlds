@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+*.js.map
+*.d.ts
+cache/
+packages/*/dist/
+packages/server/cache/
+.claude/

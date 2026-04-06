@@ -1,0 +1,198 @@
+/* ═══════════════════════════════════════════════════
+   MANY WORLDS — Terminal Aesthetic
+   Everything is monospace. Everything is <pre>.
+   ═══════════════════════════════════════════════════ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0a0a0f;
+  color: #d4c5a9;
+  font-family: 'IBM Plex Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ── Game container ──────────────────────────── */
+
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+.game-ui {
+  max-width: 64ch;
+  width: 100%;
+  font-family: 'IBM Plex Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ── Core terminal block ─────────────────────── */
+
+pre.term-block,
+.term-block {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.3;
+  letter-spacing: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Clickable options (terminal-style) ──────── */
+
+.term-option {
+  display: block;
+  padding: 0.15em 0;
+  transition: background 0.1s;
+  line-height: 1.4;
+}
+
+.term-option:hover {
+  background: #1a1a2e;
+}
+
+.term-option:focus {
+  outline: 1px solid #3a3050;
+  outline-offset: 0;
+}
+
+/* ── Sprite rendering ────────────────────────── */
+
+.sprite {
+  font-family: 'IBM Plex Mono', 'Fira Code', 'Cascadia Code', monospace !important;
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Battle scene ────────────────────────────── */
+
+.battle-scene {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0.3em 1ch;
+  background: #08080d;
+  border-left: 1px solid #1a1a25;
+  border-right: 1px solid #1a1a25;
+  min-height: 80px;
+  gap: 2ch;
+}
+
+.sprite-row {
+  display: flex;
+  gap: 1ch;
+  align-items: flex-end;
+}
+
+/* ── Map graph ───────────────────────────────── */
+
+.map-graph-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0.5em 0;
+}
+
+.map-graph-container svg {
+  max-width: 100%;
+}
+
+.map-legend {
+  display: flex;
+  gap: 2ch;
+  margin-top: 0.3em;
+  font-size: 0.9em;
+  font-family: inherit;
+}
+
+.legend-item {
+  font-family: inherit;
+}
+
+/* ── Combat log ──────────────────────────────── */
+
+.combat-log {
+  background: #06060a;
+  border-left: 1px solid #2a2030;
+  border-right: 1px solid #2a2030;
+  padding: 0.3em 1ch;
+  max-height: 12em;
+  overflow-y: auto;
+  font-size: 0.95em;
+  line-height: 1.35;
+}
+
+.combat-log-entry {
+  padding: 0.05em 0;
+}
+
+.combat-log-entry.damage { color: #cc4444; }
+.combat-log-entry.success { color: #44ff88; }
+.combat-log-entry.blessing-text { color: #cc88ff; }
+.combat-log-entry.dim { color: #7a6a5a; }
+
+.combat-log-separator {
+  border-top: 1px solid #2a2030;
+  margin: 0.2em 0;
+}
+
+/* ── Processing indicator ────────────────────── */
+
+.processing-indicator {
+  text-align: center;
+  color: #cc88ff;
+  padding: 0.3em;
+  font-style: italic;
+  font-family: inherit;
+}
+
+.processing-dot {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* ── Boss intro ──────────────────────────────── */
+
+.boss-sprite-container {
+  display: flex;
+  justify-content: center;
+  padding: 0.5em;
+  background: #08080d;
+  border: 1px solid #2a0a0a;
+  margin: 0.5em 0;
+}
+
+/* ── Screen animation ────────────────────────── */
+
+.screen {
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Scrollbar ───────────────────────────────── */
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0a0a0f; }
+::-webkit-scrollbar-thumb { background: #3a3050; border-radius: 3px; }

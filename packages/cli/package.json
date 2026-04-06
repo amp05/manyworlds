@@ -1,0 +1,19 @@
+{
+  "name": "@manyworlds/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "play": "tsx src/index.ts",
+    "simulate": "tsx src/simulate.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@manyworlds/engine": "*",
+    "@manyworlds/shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "tsx": "^4.15.6",
+    "typescript": "^5.4.5"
+  }
+}

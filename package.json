@@ -1,0 +1,20 @@
+{
+  "name": "manyworlds",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:server": "npm run dev --workspace=packages/server",
+    "dev:web": "npm run dev --workspace=packages/web",
+    "play": "npm run play --workspace=packages/cli",
+    "simulate": "npm run simulate --workspace=packages/cli",
+    "gen": "npm run gen --workspace=packages/daily-gen",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

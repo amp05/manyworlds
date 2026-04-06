@@ -1,0 +1,15 @@
+{
+  "name": "@manyworlds/engine",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@manyworlds/shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
