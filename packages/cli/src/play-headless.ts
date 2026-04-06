@@ -77,20 +77,31 @@ function decideInput(text: string): string {
   return 'ENTER';
 }
 
-// Only send input when the game is actually waiting for it
-// The Screen._inputWaiters array is populated when waitKey() is called
-// We check this via a polling approach since we can't access private fields directly
 let gameRunning = true;
+
+// Log every unique flush (captures animation frames too)
+screen.onFlush((text) => {
+  if (text !== lastScreen) {
+    lastScreen = text;
+    screenCount++;
+    // Only log screens that have actual content (not blank clears)
+    if (text.trim().length > 50) {
+      console.log(`\n${'='.repeat(80)}`);
+      console.log(`SCREEN #${screenCount}`);
+      console.log('='.repeat(80));
+      console.log(text);
+    }
+  }
+});
 
 // Poll: check if game is waiting for input, then send it
 function pollAndSend() {
   if (!gameRunning) return;
-  // Access the internal waiter queue (breaking encapsulation, but necessary for headless)
   const waiters = (screen as any)._inputWaiters as any[];
   if (waiters.length > 0) {
     const text = screen.dumpText();
     const input = decideInput(text);
-    logScreen(text, input);
+    console.log(`>> INPUT: "${input}"`);
     screen.sendKey(input);
   }
   setTimeout(pollAndSend, 5);

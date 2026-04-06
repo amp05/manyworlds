@@ -32,24 +32,20 @@ import { tween, Easing, typewrite, screenShake, flashRegion, applyScanlines } fr
 function layout(screen: Screen) {
   const w = screen.width;
   const h = screen.height;
+  const battleH = Math.min(10, Math.max(7, Math.floor(h * 0.28)));
+  // Menu is always at the bottom, log above it, everything else flows down from battle
+  const menuH = 4;
+  const menuY = h - menuH - 1;
   return {
-    // Battle area: top portion
     battleY: 1,
-    battleH: Math.min(10, Math.floor(h * 0.3)),
-    // Status panel (1 row below battle border)
-    statusY: Math.min(12, Math.floor(h * 0.3) + 2),
-    statusH: 6,
-    // Blessing bar
-    blessingY: Math.min(17, Math.floor(h * 0.3) + 7),
-    // Log panel
-    logY: Math.min(19, Math.floor(h * 0.3) + 9),
-    logH: Math.max(3, h - Math.floor(h * 0.3) - 14),
-    // Action menu
-    menuY: h - 5,
-    menuH: 4,
-    // Full width
+    battleH,
+    // Status, blessing, log all use a cursor (dynamic Y) set during render
+    // These are just max bounds
+    contentStartY: battleH + 2, // first row after battle border
+    menuY,
+    menuH,
     w,
-    pad: 2, // left padding
+    pad: 2,
   };
 }
 
@@ -118,151 +114,6 @@ function drawBattleArea(
   return { playerSpritePos: { x: px, y: py }, enemySpritePositions: enemyPositions };
 }
 
-function drawStatusPanel(
-  screen: Screen, L: ReturnType<typeof layout>,
-  playerEntity: Entity, allEnemies: Entity[],
-): void {
-  const labels = labelEntities(allEnemies);
-  let y = L.statusY;
-
-  // Enemy bars
-  for (let i = 0; i < allEnemies.length; i++) {
-    const e = allEnemies[i];
-    if (e.stats.hp <= 0) continue;
-    const label = labels[i];
-    const hpPct = e.stats.hp / e.stats.maxHp;
-    const hpColor = hpPct < 0.25 ? C.hpLow : hpPct < 0.5 ? C.hpMid : C.hp;
-    screen.text(L.pad, y, label.padEnd(22), C.enemy, C.bg, true);
-    screen.text(L.pad + 22, y, `Lv${e.level} HP `, C.dim);
-    screen.bar(L.pad + 30, y, 14, e.stats.hp, e.stats.maxHp, hpColor);
-    screen.text(L.pad + 45, y, ` ${e.stats.hp}/${e.stats.maxHp}`, C.dim);
-    // Statuses
-    if (e.statuses.length > 0) {
-      const statusStr = e.statuses.map((s) => `${s.name}(${s.duration}t)`).join(' ');
-      screen.text(L.pad + 4, y + 1, statusStr, e.statuses[0].type === 'buff' ? C.success : C.hpLow);
-    }
-    y += e.statuses.length > 0 ? 2 : 1;
-  }
-
-  y += 1;
-
-  // Player bar
-  const p = playerEntity;
-  const phpPct = p.stats.hp / p.stats.maxHp;
-  const phpColor = phpPct < 0.25 ? C.hpLow : phpPct < 0.5 ? C.hpMid : C.hp;
-  screen.text(L.pad, y, p.name.padEnd(22), C.player, C.bg, true);
-  screen.text(L.pad + 22, y, `Lv${p.level} HP `, C.dim);
-  screen.bar(L.pad + 30, y, 14, p.stats.hp, p.stats.maxHp, phpColor);
-  screen.text(L.pad + 45, y, ` ${p.stats.hp}/${p.stats.maxHp}`, C.dim);
-  y += 1;
-  screen.text(L.pad + 22, y, '     MP ', C.dim);
-  screen.bar(L.pad + 30, y, 14, p.stats.mp, p.stats.maxMp, C.mp);
-  screen.text(L.pad + 45, y, ` ${p.stats.mp}/${p.stats.maxMp}`, C.dim);
-  if (p.statuses.length > 0) {
-    y += 1;
-    for (const s of p.statuses) {
-      const desc = STATUS_DESC[s.name] ?? '';
-      const c = s.type === 'buff' ? C.success : C.hpLow;
-      screen.text(L.pad + 4, y, `${s.name}(${s.duration}t)`, c);
-      if (desc) screen.text(L.pad + 4 + s.name.length + 5, y, desc, C.dim);
-      y += 1;
-    }
-  }
-}
-
-function drawBlessingBar(
-  screen: Screen, L: ReturnType<typeof layout>,
-  blessing: BlessingRuntime,
-  blessingText: string,
-  bossBlessing?: BlessingRuntime | null,
-  bossText?: string,
-): void {
-  screen.hline(L.pad, L.blessingY, L.w - L.pad * 2, '─', C.border);
-  screen.text(L.pad, L.blessingY + 1, `* ${blessing.name}`, C.blessing, C.bg, true);
-  // Truncate blessing text to fit
-  const maxW = L.w - L.pad * 2 - blessing.name.length - 4;
-  const txt = blessingText.length > maxW ? blessingText.slice(0, maxW - 3) + '...' : blessingText;
-  screen.text(L.pad + blessing.name.length + 4, L.blessingY + 1, txt, C.dim);
-
-  if (bossBlessing && bossText) {
-    screen.text(L.pad, L.blessingY + 2, `x ${bossBlessing.name}`, C.enemy, C.bg, true);
-    const bMaxW = L.w - L.pad * 2 - bossBlessing.name.length - 4;
-    const btxt = bossText.length > bMaxW ? bossText.slice(0, bMaxW - 3) + '...' : bossText;
-    screen.text(L.pad + bossBlessing.name.length + 4, L.blessingY + 2, btxt, C.dim);
-  }
-}
-
-function drawLog(
-  screen: Screen, L: ReturnType<typeof layout>,
-  events: string[],
-  turnNumber: number,
-  whoseTurn?: string,
-): void {
-  screen.hline(L.pad, L.logY, L.w - L.pad * 2, '─', C.border);
-  // Turn indicator in log header
-  const turnLabel = whoseTurn
-    ? `Turn ${turnNumber} -- ${whoseTurn}`
-    : `Turn ${turnNumber}`;
-  screen.text(L.pad + 1, L.logY, ` ${turnLabel} `, C.dim, C.bg);
-
-  const maxLines = L.logH;
-  const recent = events.slice(-maxLines);
-  for (let i = 0; i < recent.length; i++) {
-    const line = recent[i];
-    const color = line.includes('damage') || line.includes('defeated') || line.includes('deals') ? C.hpLow
-      : line.includes('recover') || line.includes('heal') || line.includes('Regen') ? C.success
-      : line.startsWith('*') || line.startsWith('x') ? C.blessing
-      : line.includes('gains') || line.includes('fades') ? C.dim
-      : C.info;
-    const truncated = line.length > L.w - L.pad * 2 - 4 ? line.slice(0, L.w - L.pad * 2 - 7) + '...' : line;
-    screen.text(L.pad, L.logY + 1 + i, `> ${truncated}`, color);
-  }
-}
-
-function drawActionMenu(
-  screen: Screen, L: ReturnType<typeof layout>,
-  abilities: Ability[],
-  playerMp: number,
-  isPlayerTurn: boolean,
-  playerName: string,
-): void {
-  screen.hline(L.pad, L.menuY, L.w - L.pad * 2, '═', isPlayerTurn ? C.player : C.border);
-  if (isPlayerTurn) {
-    screen.text(L.pad, L.menuY, ` ${playerName}'s turn `, C.player, C.bg, true);
-  }
-
-  if (!isPlayerTurn) {
-    screen.text(L.pad + 2, L.menuY + 1, 'Enemy is acting...', C.dim);
-    return;
-  }
-
-  // Render abilities in a grid that wraps properly
-  const maxLabelW = 24; // max width per ability label
-  const colW = maxLabelW + 2;
-  const cols = Math.max(2, Math.floor((L.w - L.pad * 2) / colW));
-  const allOptions: { label: string; canUse: boolean }[] = [];
-
-  for (let i = 0; i < abilities.length; i++) {
-    const a = abilities[i];
-    const canUse = playerMp >= a.mpCost && !a.lockedForCombat && !(a.currentCooldown && a.currentCooldown > 0);
-    allOptions.push({ label: `[${i + 1}] ${a.name} ${a.mpCost}MP`, canUse });
-  }
-  allOptions.push({ label: `[${abilities.length + 1}] Defend 0MP`, canUse: true });
-  allOptions.push({ label: `[${abilities.length + 2}] Items`, canUse: true });
-
-  for (let i = 0; i < allOptions.length; i++) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    const opt = allOptions[i];
-    screen.text(L.pad + col * colW, L.menuY + 1 + row, opt.label, opt.canUse ? C.selected : C.dim);
-  }
-
-  // Hint on the line after all options
-  const menuRows = Math.ceil(allOptions.length / cols);
-  screen.text(L.pad, L.menuY + 1 + menuRows, `MP: ${playerMp}  |  Press a number key to act.`, C.dim);
-}
-
-// ── Main combat runner ──────────────────────────────────────────────────
 
 export interface CombatSceneResult {
   outcome: 'victory' | 'defeat';
@@ -325,7 +176,7 @@ export async function runCombatScene(
   }
 
   // Process one turn, return events
-  async function doTurn(action: PlayerAction | null): Promise<string[]> {
+  async function doTurn(action: PlayerAction | null): Promise<{ events: string[]; blessingFired: boolean }> {
     const events: string[] = [];
     const result = processTurn(combat, action, rng);
     for (const ev of result.events) {
@@ -334,27 +185,132 @@ export async function runCombatScene(
     }
     const narrations = await processTriggers();
     events.push(...narrations);
-    return events;
+    return { events, blessingFired: narrations.length > 0 };
   }
 
   // Full render
-  function render(turnEvents: string[], showMenu: boolean) {
+  function render(turnEvents: string[], showMenu: boolean, blessingJustFired = false) {
     screen.clear();
     const allEnemies = combat.entities.filter((e) => !e.isPlayer);
     const playerEntity = combat.entities.find((e) => e.isPlayer)!;
     const liveEnemies = allEnemies.filter((e) => e.stats.hp > 0);
 
+    // ── Battle area (fixed at top) ──
     drawBattleArea(screen, L, playerEntity, allEnemies, playerPalette);
-    drawStatusPanel(screen, L, playerEntity, allEnemies);
-    drawBlessingBar(screen, L, playerBlessing, blessingText, bossBlessing, bossText);
+
+    // ── Flowing content below battle area ──
+    let y = L.contentStartY;
+
+    // Enemy bars (compact: 1 row each, statuses inline)
+    const labels = labelEntities(allEnemies);
+    for (let i = 0; i < allEnemies.length; i++) {
+      const e = allEnemies[i];
+      if (e.stats.hp <= 0) continue;
+      const hpPct = e.stats.hp / e.stats.maxHp;
+      const hpColor = hpPct < 0.25 ? C.hpLow : hpPct < 0.5 ? C.hpMid : C.hp;
+      screen.text(L.pad, y, labels[i].padEnd(22), C.enemy, C.bg, true);
+      screen.text(L.pad + 22, y, `Lv${e.level} HP `, C.dim);
+      screen.bar(L.pad + 30, y, 14, e.stats.hp, e.stats.maxHp, hpColor);
+      screen.text(L.pad + 45, y, ` ${e.stats.hp}/${e.stats.maxHp}`, C.dim);
+      // Inline statuses
+      if (e.statuses.length > 0) {
+        const statusStr = e.statuses.map((s) => `${s.name}(${s.duration}t)`).join(' ');
+        screen.text(L.pad + 4, y + 1, statusStr, e.statuses[0].type === 'buff' ? C.success : C.hpLow);
+        y += 2;
+      } else {
+        y += 1;
+      }
+    }
+    y += 1; // gap
+
+    // Player bar
+    const p = playerEntity;
+    const phpPct = p.stats.hp / p.stats.maxHp;
+    const phpColor = phpPct < 0.25 ? C.hpLow : phpPct < 0.5 ? C.hpMid : C.hp;
+    screen.text(L.pad, y, p.name.padEnd(22), C.player, C.bg, true);
+    screen.text(L.pad + 22, y, `Lv${p.level} HP `, C.dim);
+    screen.bar(L.pad + 30, y, 14, p.stats.hp, p.stats.maxHp, phpColor);
+    screen.text(L.pad + 45, y, ` ${p.stats.hp}/${p.stats.maxHp}`, C.dim);
+    y += 1;
+    screen.text(L.pad + 22, y, '     MP ', C.dim);
+    screen.bar(L.pad + 30, y, 14, p.stats.mp, p.stats.maxMp, C.mp);
+    screen.text(L.pad + 45, y, ` ${p.stats.mp}/${p.stats.maxMp}`, C.dim);
+    y += 1;
+    if (p.statuses.length > 0) {
+      for (const s of p.statuses) {
+        const desc = STATUS_DESC[s.name] ?? '';
+        screen.text(L.pad + 4, y, `${s.name}(${s.duration}t)`, s.type === 'buff' ? C.success : C.hpLow);
+        if (desc) screen.text(L.pad + 4 + s.name.length + 5, y, desc, C.dim);
+        y += 1;
+      }
+    }
+
+    // ── Blessing bar ──
+    screen.hline(L.pad, y, L.w - L.pad * 2, '─', blessingJustFired ? C.blessing : C.border);
+    y += 1;
+    const bColor = blessingJustFired ? C.blessing : C.dim;
+    screen.text(L.pad, y, `* ${playerBlessing.name}`, C.blessing, C.bg, true);
+    const bMaxW = L.w - L.pad * 2 - playerBlessing.name.length - 4;
+    const btxt = blessingText.length > bMaxW ? blessingText.slice(0, bMaxW - 3) + '...' : blessingText;
+    screen.text(L.pad + playerBlessing.name.length + 4, y, btxt, bColor);
+    y += 1;
+    if (bossBlessing) {
+      screen.text(L.pad, y, `x ${bossBlessing.name}`, C.enemy, C.bg, true);
+      const bbMaxW = L.w - L.pad * 2 - bossBlessing.name.length - 4;
+      const bbtxt = bossText.length > bbMaxW ? bossText.slice(0, bbMaxW - 3) + '...' : bossText;
+      screen.text(L.pad + bossBlessing.name.length + 4, y, bbtxt, bColor);
+      y += 1;
+    }
+
+    // ── Combat log (fills space between blessing and menu) ──
+    screen.hline(L.pad, y, L.w - L.pad * 2, '─', C.border);
     const currentEntity = getCurrentEntity(combat);
-    const whoseTurn = currentEntity?.name ?? '';
-    drawLog(screen, L, turnEvents.length > 0 ? turnEvents : logLines.slice(-L.logH), combat.turnNumber, whoseTurn);
-    drawActionMenu(screen, L, playerEntity.abilities, playerEntity.stats.mp, showMenu, playerEntity.name);
+    screen.text(L.pad + 1, y, ` Turn ${combat.turnNumber} -- ${currentEntity?.name ?? ''} `, C.dim, C.bg);
+    y += 1;
+    const logSpace = L.menuY - y - 1;
+    const eventsToShow = turnEvents.length > 0 ? turnEvents : logLines;
+    const recent = eventsToShow.slice(-Math.max(2, logSpace));
+    for (let i = 0; i < recent.length && i < logSpace; i++) {
+      const line = recent[i];
+      const color = line.includes('damage') || line.includes('defeated') || line.includes('deals') ? C.hpLow
+        : line.includes('recover') || line.includes('heal') || line.includes('Regen') ? C.success
+        : line.startsWith('*') || line.startsWith('x') ? C.blessing
+        : line.includes('gains') || line.includes('fades') ? C.dim
+        : C.info;
+      const truncated = line.length > L.w - L.pad * 2 - 4 ? line.slice(0, L.w - L.pad * 2 - 7) + '...' : line;
+      screen.text(L.pad, y + i, `> ${truncated}`, color);
+    }
+
+    // ── Action menu (fixed at bottom) ──
+    screen.hline(L.pad, L.menuY, L.w - L.pad * 2, '═', showMenu ? C.player : C.border);
+    if (showMenu) {
+      screen.text(L.pad, L.menuY, ` ${playerEntity.name}'s turn `, C.player, C.bg, true);
+      const maxLabelW = 24;
+      const colW = maxLabelW + 2;
+      const cols = Math.max(2, Math.floor((L.w - L.pad * 2) / colW));
+      const allOptions: { label: string; canUse: boolean }[] = [];
+      for (let i = 0; i < playerEntity.abilities.length; i++) {
+        const a = playerEntity.abilities[i];
+        const canUse = playerEntity.stats.mp >= a.mpCost && !a.lockedForCombat && !(a.currentCooldown && a.currentCooldown > 0);
+        allOptions.push({ label: `[${i + 1}] ${a.name} ${a.mpCost}MP`, canUse });
+      }
+      allOptions.push({ label: `[${playerEntity.abilities.length + 1}] Defend 0MP`, canUse: true });
+      allOptions.push({ label: `[${playerEntity.abilities.length + 2}] Items`, canUse: true });
+      for (let i = 0; i < allOptions.length; i++) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        screen.text(L.pad + col * colW, L.menuY + 1 + row, allOptions[i].label, allOptions[i].canUse ? C.selected : C.dim);
+      }
+      const menuRows = Math.ceil(allOptions.length / cols);
+      screen.text(L.pad, L.menuY + 1 + menuRows, `MP: ${playerEntity.stats.mp}  |  Press a number key to act.`, C.dim);
+    } else {
+      screen.text(L.pad + 2, L.menuY + 1, 'Enemy is acting...', C.dim);
+    }
 
     // CRT scanlines
     applyScanlines(screen);
 
+    // Blessing trigger highlight: briefly flash the blessing bar border
     screen.flush();
   }
 
@@ -363,8 +319,8 @@ export async function runCombatScene(
 
   // Process enemy turns first if they're faster
   while (!isPlayerTurn(combat) && combat.status === 'active') {
-    const events = await doTurn(null);
-    render(events, false);
+    const { events, blessingFired } = await doTurn(null);
+    render(events, false, blessingFired);
     await screen.sleep(600);
   }
 
@@ -412,11 +368,11 @@ export async function runCombatScene(
     }
 
     // Process player action
-    const playerEvents = await doTurn(action);
-    render(playerEvents, false);
+    const playerResult = await doTurn(action);
+    render(playerResult.events, false, playerResult.blessingFired);
 
-    // Damage flash if player dealt damage
-    if (playerEvents.some((e) => e.includes('damage') || e.includes('defeated'))) {
+    // Brief pause to see results
+    if (playerResult.events.some((e) => e.includes('damage') || e.includes('defeated'))) {
       await screen.sleep(300);
     } else {
       await screen.sleep(200);
@@ -426,13 +382,13 @@ export async function runCombatScene(
 
     // Process each enemy turn with animation
     while (!isPlayerTurn(combat) && combat.status === 'active') {
-      const enemyEvents = await doTurn(null);
-      render(enemyEvents, false);
+      const enemyResult = await doTurn(null);
+      render(enemyResult.events, false, enemyResult.blessingFired);
 
       // Shake if player took damage
-      if (enemyEvents.some((e) => e.includes('damage') && e.includes(player.name))) {
+      if (enemyResult.events.some((e) => e.includes('damage') && e.includes(player.name))) {
         await screenShake(screen, 1, 150);
-        render(enemyEvents, false); // Redraw after shake
+        render(enemyResult.events, false, enemyResult.blessingFired);
       }
       await screen.sleep(500);
     }

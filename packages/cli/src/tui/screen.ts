@@ -318,9 +318,12 @@ export class Screen {
 
   // ── Utility ───────────────────────────────────────────────────────────
 
-  /** Sleep for ms milliseconds (instant in headless mode) */
+  /** Sleep for ms milliseconds (minimal tick in headless mode to allow flush observation) */
   sleep(ms: number): Promise<void> {
-    if (this.headless) return Promise.resolve(); // Skip delays in headless
+    if (this.headless) {
+      // Yield to event loop so onFlush observers can process the screen
+      return new Promise((resolve) => setTimeout(resolve, 1));
+    }
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
