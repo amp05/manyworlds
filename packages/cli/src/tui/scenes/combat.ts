@@ -36,8 +36,8 @@ function layout(screen: Screen) {
     // Battle area: top portion
     battleY: 1,
     battleH: Math.min(10, Math.floor(h * 0.3)),
-    // Status panel
-    statusY: Math.min(11, Math.floor(h * 0.3) + 1),
+    // Status panel (1 row below battle border)
+    statusY: Math.min(12, Math.floor(h * 0.3) + 2),
     statusH: 6,
     // Blessing bar
     blessingY: Math.min(17, Math.floor(h * 0.3) + 7),
@@ -245,7 +245,7 @@ function drawActionMenu(
   for (let i = 0; i < abilities.length; i++) {
     const a = abilities[i];
     const canUse = playerMp >= a.mpCost && !a.lockedForCombat && !(a.currentCooldown && a.currentCooldown > 0);
-    allOptions.push({ label: `[${i + 1}] ${a.name.slice(0, 14)} ${a.mpCost}MP`, canUse });
+    allOptions.push({ label: `[${i + 1}] ${a.name} ${a.mpCost}MP`, canUse });
   }
   allOptions.push({ label: `[${abilities.length + 1}] Defend 0MP`, canUse: true });
   allOptions.push({ label: `[${abilities.length + 2}] Items`, canUse: true });

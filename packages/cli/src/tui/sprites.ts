@@ -1,15 +1,25 @@
 /**
- * Block-character sprite data and renderer.
- * Each sprite is a grid of cells with palette-indexed colors.
+ * Block-character pixel art sprites using Unicode block elements.
+ * Each sprite row is a string of block characters with a color map.
+ *
+ * Characters used:
+ *   █ ▓ ▒ ░  — full, dark, medium, light shade
+ *   ▄ ▀      — lower half, upper half
+ *   ▌ ▐      — left half, right half
+ *   (space)  — transparent
+ *
+ * Colors are applied per-character via a palette map:
+ *   1 = primary, 2 = secondary, 3 = accent, 4 = skin/detail, 5 = dark
  */
 import { Screen } from './screen.js';
 
 interface SpriteFrame {
-  rows: string[];       // character data per row
-  palette: Record<string, string>;  // char → hex color mapping
+  rows: string[];       // block characters per row
+  colors: string[];     // color index per character (same length as row chars)
+  palette: Record<string, string>;  // index → hex color
 }
 
-/** Draw a sprite at (x, y) onto the screen */
+/** Draw a sprite at (x, y). Each character is colored per its palette index. */
 export function drawSprite(
   screen: Screen,
   x: number, y: number,
@@ -17,109 +27,133 @@ export function drawSprite(
   bg = '#171717',
 ): void {
   for (let row = 0; row < sprite.rows.length; row++) {
-    const line = sprite.rows[row];
-    for (let col = 0; col < line.length; col++) {
-      const ch = line[col];
+    const chars = sprite.rows[row];
+    const colorKeys = sprite.colors[row] ?? '';
+    for (let col = 0; col < chars.length; col++) {
+      const ch = chars[col];
       if (ch === ' ') continue; // transparent
-      const color = sprite.palette[ch] ?? '#888888';
+      const colorKey = colorKeys[col] ?? '1';
+      const color = sprite.palette[colorKey] ?? sprite.palette['1'] ?? '#888888';
       screen.set(x + col, y + row, ch, color, bg);
     }
   }
 }
 
-// ── Sprite data ─────────────────────────────────────────────────────────
+// ── Sprite definitions ──────────────────────────────────────────────────
+// Each sprite has `rows` (the block characters) and `colors` (which palette
+// index each character uses). This gives us per-pixel coloring.
 
 export function playerSprite(primary: string, secondary: string, accent: string): SpriteFrame {
   return {
     rows: [
-      '   aba   ',
-      '  dcbcd  ',
-      '  cbbbc  ',
-      '  dcbcd  ',
-      '   ebe   ',
-      '   c c   ',
-      '   e e   ',
+      '  ▄█▄  ',
+      ' ▐█▓█▌ ',
+      '  ███  ',
+      ' ▐▒█▒▌ ',
+      '  ▀█▀  ',
+      '  █ █  ',
+      '  ▀ ▀  ',
     ],
-    palette: {
-      'a': accent,
-      'b': primary,
-      'c': secondary,
-      'd': secondary,
-      'e': '#262626',
-    },
+    colors: [
+      '  312  ',
+      ' 11311 ',
+      '  111  ',
+      ' 12121 ',
+      '  212  ',
+      '  2 2  ',
+      '  5 5  ',
+    ],
+    palette: { '1': primary, '2': secondary, '3': accent, '5': '#44403c' },
   };
 }
 
 export function goblinSprite(primary: string, secondary: string, accent: string): SpriteFrame {
   return {
     rows: [
-      '  aaa  ',
-      ' cbabc ',
-      '  bbb  ',
-      '  cbc  ',
-      '  a a  ',
+      ' ▄▄▄ ',
+      '▐█▓█▌',
+      ' ███ ',
+      ' ▐█▌ ',
+      ' ▄ ▄ ',
     ],
-    palette: {
-      'a': secondary,
-      'b': primary,
-      'c': accent,
-    },
+    colors: [
+      ' 222 ',
+      '11311',
+      ' 111 ',
+      ' 212 ',
+      ' 2 2 ',
+    ],
+    palette: { '1': primary, '2': secondary, '3': accent },
   };
 }
 
 export function bruteSprite(primary: string, secondary: string, accent: string): SpriteFrame {
   return {
     rows: [
-      '  abcba  ',
-      ' bbcccbb ',
-      ' cbbbbc  ',
-      '  bbbbb  ',
-      '   aba   ',
-      '  bb bb  ',
-      '  aa aa  ',
+      ' ▄███▄ ',
+      '██▒▒▒██',
+      '▐█████▌',
+      ' █████ ',
+      '  ▀█▀  ',
+      ' ██ ██ ',
+      ' ▀▀ ▀▀ ',
     ],
-    palette: {
-      'a': secondary,
-      'b': primary,
-      'c': accent,
-    },
+    colors: [
+      ' 21112 ',
+      '1133311',
+      '1111111',
+      ' 11111 ',
+      '  212  ',
+      ' 11 11 ',
+      ' 22 22 ',
+    ],
+    palette: { '1': primary, '2': secondary, '3': accent },
   };
 }
 
 export function wraithSprite(primary: string, secondary: string, accent: string): SpriteFrame {
   return {
     rows: [
-      '  abba  ',
-      ' bcccb  ',
-      '  bcb   ',
-      '  aba   ',
-      '  a a   ',
+      ' ░▒▓░ ',
+      '▒▓█▓▒ ',
+      ' ▓█▓  ',
+      '  ▒   ',
+      ' ░ ░  ',
     ],
-    palette: {
-      'a': secondary + '88',
-      'b': primary,
-      'c': accent,
-    },
+    colors: [
+      ' 2213 ',
+      '211123',
+      ' 1113 ',
+      '  2   ',
+      ' 2 2  ',
+    ],
+    palette: { '1': primary, '2': secondary, '3': accent },
   };
 }
 
 export function bossSprite(primary: string, secondary: string, accent: string): SpriteFrame {
   return {
     rows: [
-      '  aabbbaa  ',
-      ' bbcccccbb ',
-      ' cbbbbbbc  ',
-      ' cbbbbbbc  ',
-      '  bbbbbbb  ',
-      '   abcba   ',
-      '  bb  bb   ',
-      '  aa  aa   ',
+      ' ▄▄███▄▄ ',
+      '██▒▒▒▒▒██',
+      '▐███████▌',
+      '▐███████▌',
+      ' ███████ ',
+      '  ▀███▀  ',
+      ' ██▀ ▀██ ',
+      ' ▀▀   ▀▀ ',
     ],
-    palette: {
-      'a': secondary,
-      'b': primary,
-      'c': accent,
-    },
+    colors: [
+      ' 22111222',
+      '113333311',
+      '111111111',
+      '111111111',
+      ' 1111111 ',
+      '  21112  ',
+      ' 112 211 ',
+      ' 22   22 ',
+    ],
+    palette: { '1': primary, '2': secondary, '3': accent },
   };
 }
 
@@ -128,7 +162,7 @@ export function getSpriteForEntity(
   name: string,
   palette?: { primary: string; secondary: string; accent: string },
 ): SpriteFrame {
-  const p = palette ?? { primary: '#888888', secondary: '#555555', accent: '#aaaaaa' };
+  const p = palette ?? { primary: '#a8a29e', secondary: '#78716c', accent: '#fbbf24' };
   const lower = name.toLowerCase();
   if (lower.includes('goblin') || lower.includes('imp')) return goblinSprite(p.primary, p.secondary, p.accent);
   if (lower.includes('brute') || lower.includes('golem')) return bruteSprite(p.primary, p.secondary, p.accent);
@@ -142,21 +176,19 @@ export async function flashSprite(
   screen: Screen,
   x: number, y: number,
   sprite: SpriteFrame,
-  flashColor = '#ff4444',
+  flashColor = '#ef4444',
   bg = '#171717',
   durationMs = 120,
 ): Promise<void> {
-  // Draw flash
   for (let row = 0; row < sprite.rows.length; row++) {
     for (let col = 0; col < sprite.rows[row].length; col++) {
       if (sprite.rows[row][col] !== ' ') {
-        screen.set(x + col, y + row, sprite.rows[row][col], flashColor, '#330000');
+        screen.set(x + col, y + row, sprite.rows[row][col], flashColor, '#3b1010');
       }
     }
   }
   screen.flush();
   await screen.sleep(durationMs);
-  // Restore
   drawSprite(screen, x, y, sprite, bg);
   screen.flush();
 }
