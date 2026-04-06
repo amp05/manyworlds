@@ -18,5 +18,8 @@
   "devDependencies": {
     "@vercel/node": "^5.7.0",
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0"
   }
 }
