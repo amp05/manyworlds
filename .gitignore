@@ -8,3 +8,4 @@ cache/
 packages/*/dist/
 packages/server/cache/
 .claude/
+.vercel

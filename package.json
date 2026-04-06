@@ -12,9 +12,11 @@
     "play": "npm run play --workspace=packages/cli",
     "simulate": "npm run simulate --workspace=packages/cli",
     "gen": "npm run gen --workspace=packages/daily-gen",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build:deploy": "cd packages/web && npx vite build"
   },
   "devDependencies": {
+    "@vercel/node": "^5.7.0",
     "typescript": "^5.4.5"
   }
 }
