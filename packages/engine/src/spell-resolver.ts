@@ -230,6 +230,16 @@ export function resolveSpellEffect(
           value: dealt,
           details: `${caster.name} drains ${dealt} from ${target.name}, recovering ${actualHeal} HP.`,
         });
+        // Emit a separate heal event so ON_HEAL triggers fire
+        if (actualHeal > 0) {
+          events.push({
+            type: 'heal',
+            sourceId: caster.id,
+            targetId: caster.id,
+            value: actualHeal,
+            details: `${caster.name} recovers ${actualHeal} HP.`,
+          });
+        }
         if (target.stats.hp <= 0) {
           events.push({ type: 'entity_defeated', targetId: target.id, details: `${target.name} is defeated!` });
         }

@@ -30,7 +30,7 @@ type SpellEffectInput = {
   scaling?: { stat: string; ratio: number };
   element?: string;
   variance?: number;
-  status?: z.infer<typeof StatusEffectSchema>;
+  status?: z.input<typeof StatusEffectSchema>;
   statTarget?: string;
   statChange?: number;
   statDuration?: number;
