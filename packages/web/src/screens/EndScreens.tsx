@@ -7,6 +7,36 @@ function cloneEntity(e: Entity): Entity {
   return JSON.parse(JSON.stringify(e));
 }
 
+export function EncounterIntroScreen() {
+  const { encounterIntro, startCombat } = useGameStore();
+  if (!encounterIntro) return null;
+
+  const { enemies, isElite } = encounterIntro;
+  const names = [...new Set(enemies.map((e) => e.name))];
+  const counts = names.map((n) => {
+    const c = enemies.filter((e) => e.name === n).length;
+    return c > 1 ? `${c} ${n}s` : `a ${n}`;
+  });
+
+  return (
+    <div className="screen">
+      <pre className="term-block">
+<Sep char="═" />
+<Span color={isElite ? C.warning : C.enemy} bold>
+  {isElite ? '  ═══ ELITE ENCOUNTER ═══' : '  ═══ ENCOUNTER ═══'}
+</Span>{'\n'}
+<Sep char="═" />
+{'\n'}
+<Span color={C.fg}>{'  '}{counts.join(' and ')} {enemies.length > 1 ? 'appear' : 'appears'}!</Span>{'\n'}
+{'\n'}
+      </pre>
+      <pre className="term-block">
+        <Option index={1} label="Fight!" onClick={() => startCombat(enemies, false)} color={C.enemy} />
+      </pre>
+    </div>
+  );
+}
+
 export function BossIntroScreen() {
   const { content, startCombat } = useGameStore();
   if (!content) return null;
@@ -39,23 +69,26 @@ export function BossIntroScreen() {
 }
 
 export function VictoryScreen() {
-  const { player, blessing, gold, visitedNodeIds } = useGameStore();
-  if (!player) return null;
+  const { player, blessing, gold, visitedNodeIds, content } = useGameStore();
+  if (!player || !content) return null;
 
   return (
     <div className="screen">
-      <Header title="R U N   C O M P L E T E" />
+      <Header title="V I C T O R Y" />
       <pre className="term-block">
 {'\n'}
-<Span color={C.success}>  The Ashen Colossus crumbles.</Span>{'\n'}
-<Span color={C.success}>  Silence returns to the wastes.</Span>{'\n'}
+<Span color={C.success} bold>  Against all odds, you prevailed.</Span>{'\n'}
+<Span color={C.success}>  The {content.world.name} will remember your name.</Span>{'\n'}
 {'\n'}
 <Sep />
-{'  '}<Span color={C.dim}>Character:  </Span><Span color={C.player}>{player.name} Lv{player.level}</Span>{'\n'}
+<Span color={C.title}>{'  ─── Run Summary ───'}</Span>{'\n'}
+{'\n'}
+{'  '}<Span color={C.dim}>Character:  </Span><Span color={C.player} bold>{player.name}</Span> <Span color={C.dim}>Lv{player.level}</Span>{'\n'}
 {'  '}<Span color={C.dim}>Blessing:   </Span><Span color={C.blessing}>{blessing?.name}</Span>{'\n'}
-{'  '}<Span color={C.dim}>Gold:       </Span><Span color={C.gold}>{String(gold)}</Span>{'\n'}
-{'  '}<Span color={C.dim}>Nodes:      </Span><Span color={C.info}>{String(visitedNodeIds.length)}</Span>{'\n'}
 {'  '}<Span color={C.dim}>Final HP:   </Span><Span color={C.hp}>{player.stats.hp}/{player.stats.maxHp}</Span>{'\n'}
+{'  '}<Span color={C.dim}>Gold:       </Span><Span color={C.gold}>{String(gold)}</Span>{'\n'}
+{'  '}<Span color={C.dim}>Battles:    </Span><Span color={C.info}>{visitedNodeIds.length} nodes traversed</Span>{'\n'}
+{'  '}<Span color={C.dim}>Abilities:  </Span><Span color={C.fg}>{player.abilities.map((a) => a.name).join(', ')}</Span>{'\n'}
 <Sep />
 {'\n'}
       </pre>

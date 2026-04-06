@@ -13,7 +13,7 @@ import { fetchDailyContent, adjudicate } from '../api/client.js';
 
 export type Phase =
   | 'loading' | 'title' | 'interview' | 'blessing_select'
-  | 'map' | 'combat' | 'level_up' | 'event' | 'shop' | 'rest'
+  | 'map' | 'encounter_intro' | 'combat' | 'level_up' | 'event' | 'shop' | 'rest'
   | 'boss_intro' | 'victory' | 'defeat';
 
 export interface GameStore {
@@ -45,6 +45,7 @@ export interface GameStore {
   currentEvent: DailyContent['events'][string] | null;
   currentShop: DailyContent['shops'][string] | null;
   currentRest: DailyContent['restStops'][string] | null;
+  encounterIntro: { enemies: Entity[]; isElite: boolean } | null;
 
   // Actions
   loadContent: () => Promise<void>;
@@ -104,9 +105,8 @@ async function handleBlessingTriggers(
 
       try {
         const response = await adjudicate(req);
-        const events = applyAdjudication(combat, response, blessing.owner);
-        allEvents.push(...events);
-        for (const ev of events) log.push(ev.details);
+        applyAdjudication(combat, response, blessing.owner);
+        // Show only narration (not mechanical "gains status" events — redundant)
         if (response.narration && !response.noEffect) {
           const prefix = blessing.owner === 'player' ? '☆' : '⚔';
           log.push(`${prefix} ${response.narration}`);
@@ -149,6 +149,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   pendingLevelUp: false,
   combatRewards: null,
   currentEvent: null,
+  encounterIntro: null,
   currentShop: null,
   currentRest: null,
 
@@ -236,7 +237,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const encounter = content.encounters[nodeId];
         if (encounter) {
           const enemies = encounter.enemies.map(cloneEntity);
-          get().startCombat(enemies, false);
+          set({
+            phase: 'encounter_intro',
+            encounterIntro: { enemies, isElite: node.type === 'elite' },
+          });
         } else {
           set({ phase: 'map' });
         }

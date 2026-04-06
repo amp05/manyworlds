@@ -6,7 +6,7 @@ import { BlessingScreen } from './screens/BlessingScreen.js';
 import { MapScreen } from './screens/MapScreen.js';
 import { CombatScreen } from './screens/CombatScreen.js';
 import { EventScreen, ShopScreen, RestScreen, LevelUpScreen } from './screens/NodeScreens.js';
-import { VictoryScreen, DefeatScreen, BossIntroScreen } from './screens/EndScreens.js';
+import { VictoryScreen, DefeatScreen, BossIntroScreen, EncounterIntroScreen } from './screens/EndScreens.js';
 
 export function App() {
   const { phase, content, error, loadContent } = useGameStore();
@@ -33,6 +33,7 @@ export function App() {
         {phase === 'interview' && <InterviewScreen />}
         {phase === 'blessing_select' && <BlessingScreen />}
         {phase === 'map' && <MapScreen />}
+        {phase === 'encounter_intro' && <EncounterIntroScreen />}
         {phase === 'combat' && <CombatScreen />}
         {phase === 'boss_intro' && <BossIntroScreen />}
         {phase === 'level_up' && <LevelUpScreen />}
