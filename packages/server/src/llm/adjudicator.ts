@@ -219,11 +219,17 @@ function mockAdjudicate(req: AdjudicationRequest): AdjudicationResponse {
 export async function adjudicate(req: AdjudicationRequest): Promise<AdjudicationResponse> {
   // Use real LLM if available, otherwise fall back to mock
   if (hasApiKey()) {
-    const prompt = buildPrompt(req);
-    const raw = await callClaude(prompt, ADJUDICATION_SYSTEM);
-    const parsed = JSON.parse(raw) as unknown;
-    const validated = AdjudicationResponseSchema.parse(parsed);
-    return validated;
+    try {
+      const prompt = buildPrompt(req);
+      const raw = await callClaude(prompt, ADJUDICATION_SYSTEM);
+      const parsed = JSON.parse(raw) as unknown;
+      const validated = AdjudicationResponseSchema.parse(parsed);
+      return validated;
+    } catch (err) {
+      console.error('LLM adjudication failed, falling back to mock:', err);
+      // Fall back to mock adjudicator if LLM response can't be parsed
+      return mockAdjudicate(req);
+    }
   }
 
   return mockAdjudicate(req);

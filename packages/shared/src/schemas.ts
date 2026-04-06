@@ -13,14 +13,14 @@ const StatsKeySchema = z.enum([
 const StatusEffectSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.enum(['buff', 'debuff', 'neutral']),
+  type: z.enum(['buff', 'debuff', 'neutral']).optional().default('neutral'),
   stat: StatsKeySchema.optional(),
   modifier: z.number().optional(),
   modifierPct: z.number().optional(),
   damagePerTurn: z.number().optional(),
   healPerTurn: z.number().optional(),
-  duration: z.number(),
-  stackable: z.boolean(),
+  duration: z.number().optional().default(1),
+  stackable: z.boolean().optional().default(false),
   visualEffect: z.string().optional(),
 });
 
@@ -148,12 +148,12 @@ export const StateDeltaSchema = z.object({
   removeStatusId: z.string().optional(),
   preventAction: z.boolean().optional(),
   grantInvulnerability: z.number().optional(),
-});
+}).passthrough(); // Allow extra fields from LLM without failing
 
 export const AdjudicationResponseSchema = z.object({
-  stateDelta: z.array(StateDeltaSchema),
-  blessingState: z.record(z.unknown()),
-  narration: z.string(),
+  stateDelta: z.array(StateDeltaSchema).optional().default([]),
+  blessingState: z.record(z.unknown()).optional().default({}),
+  narration: z.string().optional().default(''),
   noEffect: z.boolean().optional(),
 });
 
