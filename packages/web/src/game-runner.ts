@@ -44,6 +44,8 @@ function makeBlessingRuntime(b: Blessing, owner: 'player' | 'boss'): BlessingRun
 }
 
 export async function runWebGame(screen: WebScreen): Promise<void> {
+  // Game loop — restarts on victory/defeat
+  while (true) {
   // Use embedded stubs (works offline / static deploy)
   // Try the live API for adjudication, fall back to mock
   const content: DailyContent = buildStubDailyContent();
@@ -243,6 +245,7 @@ export async function runWebGame(screen: WebScreen): Promise<void> {
     visitedNodeIds.push(nextNode.id);
     currentNodeId = nextNode.id;
   }
+  } // end while(true) game loop
 }
 
 async function showLevelUp(screen: WebScreen, player: Entity, abilities: any[]): Promise<void> {
@@ -279,7 +282,7 @@ async function showEndScreen(
   screen.text(4, y, `Character: ${player.name} Lv${player.level}`, C.player);
   screen.text(4, y + 1, `Blessing:  ${blessing.name}`, C.blessing);
   screen.text(4, y + 2, `Abilities: ${player.abilities.map((a) => a.name).join(', ')}`, C.dim);
-  screen.centerText(screen.height - 3, '[ Press ENTER ]', C.dim);
+  screen.centerText(screen.height - 3, '[ Press ENTER to play again ]', C.dim);
   screen.flush();
   await screen.waitEnter();
 }

@@ -33,6 +33,8 @@ export async function startTuiGame(existingScreen?: Screen): Promise<void> {
   if (!existingScreen) screen.start();
 
   try {
+    // Game loop — restarts on victory/defeat
+    while (true) {
     const content = buildStubDailyContent();
     const rng = new SeededRNG(content.seed);
 
@@ -222,6 +224,7 @@ export async function startTuiGame(existingScreen?: Screen): Promise<void> {
       currentNodeId = nextNode.id;
       await wipeTransition(screen, 200);
     }
+    } // end while(true) game loop
   } finally {
     screen.stop();
   }
@@ -373,7 +376,7 @@ async function showVictoryScreen(
   screen.text(4, y + 2, `Gold:      ${gold}`, C.gold);
   screen.text(4, y + 3, `HP:        ${player.stats.hp}/${player.stats.maxHp}`, C.hp);
   screen.text(4, y + 4, `Abilities: ${player.abilities.map((a) => a.name).join(', ')}`, C.dim);
-  screen.centerText(screen.height - 3, '[ Press ENTER to exit ]', C.selected);
+  screen.centerText(screen.height - 3, '[ Press ENTER to play again ]', C.selected);
   applyScanlines(screen);
   screen.flush();
   await screen.waitEnter();
@@ -392,7 +395,7 @@ async function showDefeatScreen(
   screen.text(4, y, `Character: ${player.name} Lv${player.level}`, C.fg);
   screen.text(4, y + 1, `Blessing:  ${blessing.name}`, C.blessing);
   screen.text(4, y + 2, `Nodes:     ${nodes}`, C.dim);
-  screen.centerText(screen.height - 3, '[ Press ENTER to exit ]', C.dim);
+  screen.centerText(screen.height - 3, '[ Press ENTER to play again ]', C.dim);
   applyScanlines(screen);
   screen.flush();
   await screen.waitEnter();
