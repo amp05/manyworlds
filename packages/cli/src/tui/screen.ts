@@ -26,8 +26,8 @@ export class Screen {
   private _started = false;
 
   constructor() {
-    this.width = term.width;
-    this.height = term.height;
+    this.width = term.width || 80;
+    this.height = term.height || 24;
     this.cells = this.makeGrid();
     this.prevCells = this.makeGrid();
   }
@@ -50,7 +50,7 @@ export class Screen {
     this._started = true;
     term.fullscreen(true);
     term.grabInput({ mouse: false });
-    term.hideCursor();
+    term('\x1b[?25l'); // hide cursor
 
     term.on('key', (key: string) => {
       if (key === 'CTRL_C') {
@@ -74,7 +74,7 @@ export class Screen {
   stop(): void {
     term.fullscreen(false);
     term.grabInput(false);
-    term.showCursor();
+    term('\x1b[?25h'); // show cursor (raw escape)
     term.styleReset();
     this._started = false;
   }
@@ -128,6 +128,7 @@ export class Screen {
   /** Set a single cell */
   set(x: number, y: number, char: string, fg = '#d4c5a9', bg = '#0a0a0f', bold = false): void {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
+    if (!this.cells[y]) return; // safety
     this.cells[y][x] = { char: char[0] ?? ' ', fg, bg, bold };
     this._dirty = true;
   }
