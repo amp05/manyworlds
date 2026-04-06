@@ -65,6 +65,26 @@ const STATUS_DESC: Record<string, string> = {
   'Slowed': 'speed reduced',
 };
 
+/** Word-wrap text to fit within maxWidth. Returns array of lines. */
+function wrapText(text: string, maxWidth: number): string[] {
+  if (text.length <= maxWidth) return [text];
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if (current.length === 0) {
+      current = word;
+    } else if (current.length + 1 + word.length <= maxWidth) {
+      current += ' ' + word;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 function labelEntities(entities: Entity[]): string[] {
   const counts: Record<string, number> = {};
   for (const e of entities) counts[e.name] = (counts[e.name] ?? 0) + 1;
@@ -251,16 +271,20 @@ export async function runCombatScene(
     y += 1;
     const bColor = blessingJustFired ? C.blessing : C.dim;
     screen.text(L.pad, y, `* ${playerBlessing.name}`, C.blessing, C.bg, true);
-    const bMaxW = L.w - L.pad * 2 - playerBlessing.name.length - 4;
-    const btxt = blessingText.length > bMaxW ? blessingText.slice(0, bMaxW - 3) + '...' : blessingText;
-    screen.text(L.pad + playerBlessing.name.length + 4, y, btxt, bColor);
     y += 1;
+    const bLines = wrapText(blessingText, L.w - L.pad * 2 - 2);
+    for (const bl of bLines) {
+      screen.text(L.pad + 2, y, bl, bColor);
+      y += 1;
+    }
     if (bossBlessing) {
       screen.text(L.pad, y, `x ${bossBlessing.name}`, C.enemy, C.bg, true);
-      const bbMaxW = L.w - L.pad * 2 - bossBlessing.name.length - 4;
-      const bbtxt = bossText.length > bbMaxW ? bossText.slice(0, bbMaxW - 3) + '...' : bossText;
-      screen.text(L.pad + bossBlessing.name.length + 4, y, bbtxt, bColor);
       y += 1;
+      const bbLines = wrapText(bossText, L.w - L.pad * 2 - 2);
+      for (const bl of bbLines) {
+        screen.text(L.pad + 2, y, bl, bColor);
+        y += 1;
+      }
     }
 
     // ── Combat log (fills space between blessing and menu) ──
@@ -270,16 +294,24 @@ export async function runCombatScene(
     y += 1;
     const logSpace = L.menuY - y - 1;
     const eventsToShow = turnEvents.length > 0 ? turnEvents : logLines;
-    const recent = eventsToShow.slice(-Math.max(2, logSpace));
-    for (let i = 0; i < recent.length && i < logSpace; i++) {
-      const line = recent[i];
+    const maxLineW = L.w - L.pad * 2 - 4; // width for "> " prefix + content
+
+    // Wrap all log lines, then take the most recent that fit
+    const wrappedLines: { text: string; color: string }[] = [];
+    for (const line of eventsToShow) {
       const color = line.includes('damage') || line.includes('defeated') || line.includes('deals') ? C.hpLow
         : line.includes('recover') || line.includes('heal') || line.includes('Regen') ? C.success
         : line.startsWith('*') || line.startsWith('x') ? C.blessing
         : line.includes('gains') || line.includes('fades') ? C.dim
         : C.info;
-      const truncated = line.length > L.w - L.pad * 2 - 4 ? line.slice(0, L.w - L.pad * 2 - 7) + '...' : line;
-      screen.text(L.pad, y + i, `> ${truncated}`, color);
+      const lines = wrapText(line, maxLineW);
+      for (let li = 0; li < lines.length; li++) {
+        wrappedLines.push({ text: li === 0 ? `> ${lines[li]}` : `  ${lines[li]}`, color });
+      }
+    }
+    const recentWrapped = wrappedLines.slice(-Math.max(2, logSpace));
+    for (let i = 0; i < recentWrapped.length && i < logSpace; i++) {
+      screen.text(L.pad, y + i, recentWrapped[i].text, recentWrapped[i].color);
     }
 
     // ── Action menu (fixed at bottom) ──
