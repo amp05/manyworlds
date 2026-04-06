@@ -6,13 +6,14 @@
  * Input comes from a queue. The screen can be dumped as plain text.
  * This lets Claude play the game and iterate on it.
  */
+import { createRequire } from 'module';
+const _require = createRequire(import.meta.url);
+
 let term: any = null;
 
 function getTerm() {
   if (!term) {
-    // Dynamic import so headless mode doesn't need terminal-kit
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    term = require('terminal-kit').terminal;
+    term = _require('terminal-kit').terminal;
   }
   return term;
 }
