@@ -34,35 +34,35 @@ const DIM = '\x1b[2m';
 // ── Color palette ─────────────────────────────────────────────────────────────
 
 export const COLORS = {
-  // UI chrome
-  bg: '#0a0a0f',
-  bgAlt: '#12121a',
-  fg: '#d4c5a9',
-  fgDim: '#7a6a5a',
-  border: '#3a3050',
+  // UI chrome — matches personal site dark theme
+  bg: '#171717',
+  bgAlt: '#262626',
+  fg: '#fafaf9',
+  fgDim: '#a8a29e',
+  border: '#292524',
 
   // Accent colors
-  fire: '#ff6600',
-  void_: '#8888ff',
-  shadow: '#9966cc',
-  earth: '#886644',
-  ice: '#88ccff',
+  fire: '#f97316',
+  void_: '#a78bfa',
+  shadow: '#c084fc',
+  earth: '#a8a29e',
+  ice: '#67e8f9',
 
   // Status
-  hp: '#44cc44',
-  hpLow: '#cc4444',
-  mp: '#4488ff',
-  gold: '#ffcc44',
+  hp: '#4ade80',
+  hpLow: '#ef4444',
+  mp: '#60a5fa',
+  gold: '#fbbf24',
 
   // UI elements
-  title: '#ff9944',
-  selected: '#ffdd66',
-  enemy: '#ff6644',
-  player: '#44ddff',
-  blessing: '#cc88ff',
-  info: '#aaaacc',
-  warning: '#ffaa44',
-  success: '#44ff88',
+  title: '#fbbf24',
+  selected: '#fbbf24',
+  enemy: '#f87171',
+  player: '#67e8f9',
+  blessing: '#c084fc',
+  info: '#a8a29e',
+  warning: '#f59e0b',
+  success: '#4ade80',
 };
 
 // ── Width constants ───────────────────────────────────────────────────────────

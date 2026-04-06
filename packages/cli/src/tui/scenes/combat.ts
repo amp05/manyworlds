@@ -89,13 +89,13 @@ function drawBattleArea(
   playerPalette?: { primary: string; secondary: string; accent: string },
 ): { playerSpritePos: { x: number; y: number }; enemySpritePositions: { x: number; y: number }[] } {
   // Background
-  screen.fill(L.pad, L.battleY, L.w - L.pad * 2, L.battleH, ' ', C.fg, '#06060c');
+  screen.fill(L.pad, L.battleY, L.w - L.pad * 2, L.battleH, ' ', C.fg, '#1a1a1a');
 
   // Player sprite (left side)
   const pSprite = getSpriteForEntity(playerEntity.name, playerPalette);
   const px = L.pad + 3;
   const py = L.battleY + L.battleH - pSprite.rows.length;
-  drawSprite(screen, px, py, pSprite, '#06060c');
+  drawSprite(screen, px, py, pSprite, '#1a1a1a');
 
   // Enemy sprites (right side, spaced)
   const liveEnemies = enemies.filter((e) => e.stats.hp > 0);
@@ -108,7 +108,7 @@ function drawBattleArea(
     const sprite = getSpriteForEntity(e.name, e.spriteDescriptor?.palette);
     const ex = enemyStartX + i * enemySpacing;
     const ey = L.battleY + L.battleH - sprite.rows.length;
-    drawSprite(screen, ex, ey, sprite, '#06060c');
+    drawSprite(screen, ex, ey, sprite, '#1a1a1a');
     enemyPositions.push({ x: ex, y: ey });
   }
 

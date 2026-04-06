@@ -14,7 +14,7 @@ export function drawSprite(
   screen: Screen,
   x: number, y: number,
   sprite: SpriteFrame,
-  bg = '#0a0a0f',
+  bg = '#171717',
 ): void {
   for (let row = 0; row < sprite.rows.length; row++) {
     const line = sprite.rows[row];
@@ -45,7 +45,7 @@ export function playerSprite(primary: string, secondary: string, accent: string)
       'b': primary,
       'c': secondary,
       'd': secondary,
-      'e': '#1a1a2e',
+      'e': '#262626',
     },
   };
 }
@@ -143,7 +143,7 @@ export async function flashSprite(
   x: number, y: number,
   sprite: SpriteFrame,
   flashColor = '#ff4444',
-  bg = '#0a0a0f',
+  bg = '#171717',
   durationMs = 120,
 ): Promise<void> {
   // Draw flash

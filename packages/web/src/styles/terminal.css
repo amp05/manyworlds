@@ -10,8 +10,8 @@
 }
 
 body {
-  background: #0a0a0f;
-  color: #d4c5a9;
+  background: #171717;
+  color: #fafaf9;
   font-family: 'IBM Plex Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 14px;
   line-height: 1;
@@ -59,11 +59,11 @@ pre.term-block,
 }
 
 .term-option:hover {
-  background: #1a1a2e;
+  background: #292524;
 }
 
 .term-option:focus {
-  outline: 1px solid #3a3050;
+  outline: 1px solid #292524;
   outline-offset: 0;
 }
 
@@ -85,9 +85,9 @@ pre.term-block,
   justify-content: space-between;
   align-items: flex-end;
   padding: 0.3em 1ch;
-  background: #08080d;
-  border-left: 1px solid #1a1a25;
-  border-right: 1px solid #1a1a25;
+  background: #1a1a1a;
+  border-left: 1px solid #262626;
+  border-right: 1px solid #262626;
   min-height: 80px;
   gap: 2ch;
 }
@@ -115,9 +115,9 @@ pre.term-block,
 /* ── Combat log ──────────────────────────────── */
 
 .combat-log {
-  background: #06060a;
-  border-left: 1px solid #2a2030;
-  border-right: 1px solid #2a2030;
+  background: #1a1a1a;
+  border-left: 1px solid #292524;
+  border-right: 1px solid #292524;
   padding: 0.3em 1ch;
   max-height: 12em;
   overflow-y: auto;
@@ -129,13 +129,13 @@ pre.term-block,
   padding: 0.05em 0;
 }
 
-.combat-log-entry.damage { color: #cc4444; }
-.combat-log-entry.success { color: #44ff88; }
-.combat-log-entry.blessing-text { color: #cc88ff; }
-.combat-log-entry.dim { color: #7a6a5a; }
+.combat-log-entry.damage { color: #ef4444; }
+.combat-log-entry.success { color: #4ade80; }
+.combat-log-entry.blessing-text { color: #c084fc; }
+.combat-log-entry.dim { color: #a8a29e; }
 
 .combat-log-separator {
-  border-top: 1px solid #2a2030;
+  border-top: 1px solid #292524;
   margin: 0.2em 0;
 }
 
@@ -143,7 +143,7 @@ pre.term-block,
 
 .processing-indicator {
   text-align: center;
-  color: #cc88ff;
+  color: #c084fc;
   padding: 0.3em;
   font-style: italic;
   font-family: inherit;
@@ -164,8 +164,8 @@ pre.term-block,
   display: flex;
   justify-content: center;
   padding: 0.5em;
-  background: #08080d;
-  border: 1px solid #2a0a0a;
+  background: #1a1a1a;
+  border: 1px solid #3b1010;
   margin: 0.5em 0;
 }
 
@@ -183,5 +183,5 @@ pre.term-block,
 /* ── Scrollbar ───────────────────────────────── */
 
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0a0a0f; }
-::-webkit-scrollbar-thumb { background: #3a3050; border-radius: 3px; }
+::-webkit-scrollbar-track { background: #171717; }
+::-webkit-scrollbar-thumb { background: #292524; border-radius: 3px; }

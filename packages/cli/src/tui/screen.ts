@@ -14,7 +14,7 @@ export interface Cell {
   bold?: boolean;
 }
 
-export const EMPTY_CELL: Cell = { char: ' ', fg: '#d4c5a9', bg: '#0a0a0f' };
+export const EMPTY_CELL: Cell = { char: ' ', fg: '#fafaf9', bg: '#171717' };
 
 export class Screen {
   width: number;
@@ -116,17 +116,17 @@ export class Screen {
   // ── Drawing primitives ────────────────────────────────────────────────
 
   /** Clear the buffer to the default background */
-  clear(bg = '#0a0a0f'): void {
+  clear(bg = '#171717'): void {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        this.cells[y][x] = { char: ' ', fg: '#d4c5a9', bg, bold: false };
+        this.cells[y][x] = { char: ' ', fg: '#fafaf9', bg, bold: false };
       }
     }
     this._dirty = true;
   }
 
   /** Set a single cell */
-  set(x: number, y: number, char: string, fg = '#d4c5a9', bg = '#0a0a0f', bold = false): void {
+  set(x: number, y: number, char: string, fg = '#fafaf9', bg = '#171717', bold = false): void {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
     if (!this.cells[y]) return; // safety
     this.cells[y][x] = { char: char[0] ?? ' ', fg, bg, bold };
@@ -140,19 +140,19 @@ export class Screen {
   }
 
   /** Write a string starting at (x, y) */
-  text(x: number, y: number, str: string, fg = '#d4c5a9', bg = '#0a0a0f', bold = false): void {
+  text(x: number, y: number, str: string, fg = '#fafaf9', bg = '#171717', bold = false): void {
     for (let i = 0; i < str.length; i++) {
       this.set(x + i, y, str[i], fg, bg, bold);
     }
   }
 
   /** Draw a horizontal line */
-  hline(x: number, y: number, len: number, char = '─', fg = '#3a3050', bg = '#0a0a0f'): void {
+  hline(x: number, y: number, len: number, char = '─', fg = '#292524', bg = '#171717'): void {
     for (let i = 0; i < len; i++) this.set(x + i, y, char, fg, bg);
   }
 
   /** Draw a box with border */
-  box(x: number, y: number, w: number, h: number, fg = '#3a3050', bg = '#0a0a0f'): void {
+  box(x: number, y: number, w: number, h: number, fg = '#292524', bg = '#171717'): void {
     this.set(x, y, '┌', fg, bg);
     this.set(x + w - 1, y, '┐', fg, bg);
     this.set(x, y + h - 1, '└', fg, bg);
@@ -168,7 +168,7 @@ export class Screen {
   }
 
   /** Fill a rectangle */
-  fill(x: number, y: number, w: number, h: number, char = ' ', fg = '#d4c5a9', bg = '#0a0a0f'): void {
+  fill(x: number, y: number, w: number, h: number, char = ' ', fg = '#fafaf9', bg = '#171717'): void {
     for (let dy = 0; dy < h; dy++) {
       for (let dx = 0; dx < w; dx++) {
         this.set(x + dx, y + dy, char, fg, bg);
@@ -177,7 +177,7 @@ export class Screen {
   }
 
   /** Draw a progress bar */
-  bar(x: number, y: number, width: number, current: number, max: number, fgColor: string, bgColor = '#1a1a2e'): void {
+  bar(x: number, y: number, width: number, current: number, max: number, fgColor: string, bgColor = '#292524'): void {
     const filled = Math.round((Math.max(0, current) / max) * width);
     for (let i = 0; i < width; i++) {
       this.set(x + i, y, i < filled ? '█' : '░', i < filled ? fgColor : bgColor);
@@ -185,7 +185,7 @@ export class Screen {
   }
 
   /** Draw centered text */
-  centerText(y: number, str: string, fg = '#d4c5a9', bg = '#0a0a0f', bold = false): void {
+  centerText(y: number, str: string, fg = '#fafaf9', bg = '#171717', bold = false): void {
     const x = Math.floor((this.width - str.length) / 2);
     this.text(x, y, str, fg, bg, bold);
   }
@@ -250,34 +250,36 @@ function hexToRgb(hex: string): [number, number, number] {
 
 // ── Color palette ───────────────────────────────────────────────────────
 
+// Palette derived from the personal site's dark theme:
+// bg #171717, fg #fafaf9, muted #a8a29e, accent #fbbf24, border #292524
 export const C = {
-  bg: '#0a0a0f',
-  bgAlt: '#12121a',
-  bgPanel: '#0e0e16',
-  fg: '#d4c5a9',
-  dim: '#7a6a5a',
-  border: '#3a3050',
-  borderBright: '#5a4a70',
+  bg: '#171717',
+  bgAlt: '#262626',
+  bgPanel: '#1e1e1e',
+  fg: '#fafaf9',
+  dim: '#a8a29e',
+  border: '#292524',
+  borderBright: '#44403c',
 
-  hp: '#44cc44',
-  hpLow: '#cc4444',
-  hpMid: '#ffaa44',
-  mp: '#4488ff',
-  gold: '#ffcc44',
+  hp: '#4ade80',
+  hpLow: '#ef4444',
+  hpMid: '#f59e0b',
+  mp: '#60a5fa',
+  gold: '#fbbf24',
 
-  title: '#ff9944',
-  selected: '#ffdd66',
-  enemy: '#ff6644',
-  player: '#44ddff',
-  blessing: '#cc88ff',
-  info: '#aaaacc',
-  warning: '#ffaa44',
-  success: '#44ff88',
+  title: '#fbbf24',
+  selected: '#fbbf24',
+  enemy: '#f87171',
+  player: '#67e8f9',
+  blessing: '#c084fc',
+  info: '#a8a29e',
+  warning: '#f59e0b',
+  success: '#4ade80',
 
-  fire: '#ff6600',
-  ice: '#66ccff',
-  void_: '#8888ff',
-  water: '#4488cc',
-  earth: '#886644',
-  shadow: '#9966cc',
+  fire: '#f97316',
+  ice: '#67e8f9',
+  void_: '#a78bfa',
+  water: '#38bdf8',
+  earth: '#a8a29e',
+  shadow: '#c084fc',
 } as const;
