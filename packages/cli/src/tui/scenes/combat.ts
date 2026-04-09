@@ -16,13 +16,13 @@
  *   └──────────────────────────────────────────────┘
  */
 import type { Entity, Ability } from '@manyworlds/shared';
-import type { BlessingRuntime, AdjudicationRequest } from '@manyworlds/shared';
+import type { BlessingRuntime } from '@manyworlds/shared';
 import { SeededRNG } from '@manyworlds/shared';
 import {
-  initCombat, processTurn, applyAdjudication, isPlayerTurn,
+  initCombat, processTurn, isPlayerTurn,
   getCurrentEntity, type CombatState, type PlayerAction, type TurnEvent,
 } from '@manyworlds/engine';
-import { applyExp, awardExp, awardGold } from '@manyworlds/engine';
+import { applyExp, awardExp, awardGold, processBlessingTriggers } from '@manyworlds/engine';
 import type { IScreen } from '../screen-interface.js';
 import { C } from '../colors.js';
 import { drawSprite, getSpriteForEntity, flashSprite } from '../sprites.js';
@@ -200,10 +200,7 @@ export async function runCombatScene(
   enemies: Entity[],
   playerBlessing: BlessingRuntime,
   bossBlessing: BlessingRuntime | null,
-  blessingText: string,
-  bossText: string,
   rng: SeededRNG,
-  adjudicate: (req: AdjudicationRequest) => Promise<import('@manyworlds/shared').AdjudicationResponse>,
   playerPalette?: { primary: string; secondary: string; accent: string },
 ): Promise<CombatSceneResult> {
   const combat = initCombat(enemies, player, playerBlessing, bossBlessing, rng);
@@ -230,43 +227,14 @@ export async function runCombatScene(
     return text;
   }
 
-  // Helper: adjudicate pending triggers
-  async function processTriggers(): Promise<string[]> {
-    const narrations: string[] = [];
-    const triggers = [...combat.pendingTriggers];
-    combat.pendingTriggers = [];
-    for (const ctx of triggers) {
-      for (const blessing of [combat.playerBlessing, combat.bossBlessing]) {
-        if (!blessing || !blessing.triggers.includes(ctx.trigger)) continue;
-        const req: AdjudicationRequest = {
-          blessingId: blessing.id, blessingText: blessing.text,
-          blessingState: blessing.state, triggerContext: ctx,
-          gameState: {
-            entities: combat.entities, turnNumber: combat.turnNumber,
-            currentEntityId: combat.turnOrder[combat.currentTurnIndex] ?? 'player',
-            combatLog: logLines.slice(-10),
-          },
-        };
-        const response = await adjudicate(req);
-        applyAdjudication(combat, response, blessing.owner);
-        if (response.narration && !response.noEffect) {
-          const prefix = blessing.owner === 'player' ? '*' : 'x';
-          const line = `${prefix} ${response.narration}`;
-          logLines.push(line);
-          roundLog.push(line);
-          narrations.push(line);
-        }
-        if (blessing.state.usedAbilities) {
-          const used = blessing.state.usedAbilities as string[];
-          for (const entity of combat.entities) {
-            for (const ability of entity.abilities) {
-              if (used.includes(ability.id)) ability.lockedForCombat = true;
-            }
-          }
-        }
-      }
+  // Helper: process pending blessing triggers (synchronous via engine)
+  function processTriggers(): string[] {
+    const result = processBlessingTriggers(combat);
+    for (const n of result.narrations) {
+      logLines.push(n);
+      roundLog.push(n);
     }
-    return narrations;
+    return result.narrations;
   }
 
   // Process one turn — shows action events, then blessing resolution with loading state
@@ -293,7 +261,6 @@ export async function runCombatScene(
     const hasTriggers = combat.pendingTriggers.length > 0;
     if (hasTriggers) {
       // Show events so far, then animate the blessing activation
-      for (const e of events) roundLog.push(e);
       render(events, false, true);
       await screen.sleep(200);
 
@@ -312,7 +279,7 @@ export async function runCombatScene(
       }
     }
 
-    const narrations = await processTriggers();
+    const narrations = processTriggers();
     events.push(...narrations);
     return { events, blessingFired: narrations.length > 0, hadCrit };
   }
@@ -474,7 +441,7 @@ export async function runCombatScene(
   }
 
   // Initial triggers
-  await processTriggers();
+  processTriggers();
 
   // Process enemy turns first if they're faster
   while (!isPlayerTurn(combat) && combat.status === 'active') {

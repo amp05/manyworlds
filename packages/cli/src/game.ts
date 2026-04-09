@@ -7,13 +7,11 @@ import type {
   FloorMap,
   MapNode,
 } from '@manyworlds/shared';
-import type { BlessingRuntime, AdjudicationRequest } from '@manyworlds/shared';
-import type { TriggerContext } from '@manyworlds/shared';
+import type { BlessingRuntime } from '@manyworlds/shared';
 import { SeededRNG } from '@manyworlds/shared';
 import {
   initCombat,
   processTurn,
-  applyAdjudication,
   isPlayerTurn,
   getCurrentEntity,
   type CombatState,
@@ -21,14 +19,14 @@ import {
   type TurnEvent,
 } from '@manyworlds/engine';
 import { applyExp, awardExp, awardGold } from '@manyworlds/engine';
-import { getFrontierNodes } from '@manyworlds/engine';
+import { getFrontierNodes, createBlessingRuntime as engineCreateBlessingRuntime, processBlessingTriggers } from '@manyworlds/engine';
 import {
   clearScreen, print, printSep, printBlank, header, separator,
   colorize, renderEntityRow, renderBlessingBanner, renderAbilityMenu,
   renderItemMenu, renderSprite, progressBar, COLORS, TERMINAL_WIDTH,
 } from './renderer.js';
 import { pickNumber, pressEnter, closeInput } from './input.js';
-import { buildStubDailyContent, adjudicate } from './stubs.js';
+import { buildStubDailyContent } from './stubs.js';
 
 // ── Run state ─────────────────────────────────────────────────────────────────
 
@@ -61,16 +59,7 @@ function createPlayer(arch: CharacterArchetype): Entity {
 }
 
 function createBlessingRuntime(b: Blessing, owner: 'player' | 'boss'): BlessingRuntime {
-  return {
-    id: b.id,
-    name: b.name,
-    text: b.text,
-    triggers: b.triggers as BlessingRuntime['triggers'],
-    blessingParams: { ...b.blessingParams },
-    state: {},
-    owner,
-    visualEffect: b.visualEffect,
-  };
+  return engineCreateBlessingRuntime(b, owner);
 }
 
 function cloneEntity(e: Entity): Entity {
@@ -456,7 +445,7 @@ async function runCombat(
   const logLines: string[] = [];
 
   // Process initial triggers
-  await handleBlessingTriggers(combat, state, logLines);
+  handleBlessingTriggers(combat, state, logLines);
 
   /** Process one turn and collect its events. Returns the events from that turn. */
   async function processOneTurn(action: PlayerAction | null): Promise<string[]> {
@@ -466,39 +455,11 @@ async function runCombat(
       logLines.push(ev.details);
       turnEvents.push(ev.details);
     }
-    // Handle blessing triggers and collect their narration
-    const triggers = [...combat.pendingTriggers];
-    combat.pendingTriggers = [];
-    for (const ctx of triggers) {
-      for (const blessing of [combat.playerBlessing, combat.bossBlessing]) {
-        if (!blessing || !blessing.triggers.includes(ctx.trigger)) continue;
-        const req = {
-          blessingId: blessing.id, blessingText: blessing.text,
-          blessingState: blessing.state, triggerContext: ctx,
-          gameState: {
-            entities: combat.entities, turnNumber: combat.turnNumber,
-            currentEntityId: combat.turnOrder[combat.currentTurnIndex] ?? 'player',
-            combatLog: logLines.slice(-10),
-          },
-        };
-        const response = await adjudicate(req);
-        applyAdjudication(combat, response, blessing.owner);
-        // Show only the narration (not mechanical "gains status" events — those are redundant)
-        if (response.narration && !response.noEffect) {
-          const prefix = blessing.owner === 'player' ? '*' : 'x';
-          const line = `${prefix} ${response.narration}`;
-          logLines.push(line);
-          turnEvents.push(line);
-        }
-        if (blessing.state.usedAbilities) {
-          const used = blessing.state.usedAbilities as string[];
-          for (const entity of combat.entities) {
-            for (const ability of entity.abilities) {
-              if (used.includes(ability.id)) ability.lockedForCombat = true;
-            }
-          }
-        }
-      }
+    // Handle blessing triggers
+    const triggerResult = processBlessingTriggers(combat);
+    for (const n of triggerResult.narrations) {
+      logLines.push(n);
+      turnEvents.push(n);
     }
     return turnEvents;
   }
@@ -772,70 +733,14 @@ async function getPlayerAction(combat: CombatState, player: Entity): Promise<Pla
   return { type: 'item', itemId: item.id };
 }
 
-async function handleBlessingTriggers(
+function handleBlessingTriggers(
   combat: CombatState,
-  state: RunState,
+  _state: RunState,
   logLines: string[],
-): Promise<void> {
-  const triggers = [...combat.pendingTriggers];
-  combat.pendingTriggers = [];
-
-  for (const triggerCtx of triggers) {
-    // Player blessing first
-    if (combat.playerBlessing && combat.playerBlessing.triggers.includes(triggerCtx.trigger)) {
-      const req: AdjudicationRequest = {
-        blessingId: combat.playerBlessing.id,
-        blessingText: combat.playerBlessing.text,
-        blessingState: combat.playerBlessing.state,
-        triggerContext: triggerCtx,
-        gameState: {
-          entities: combat.entities,
-          turnNumber: combat.turnNumber,
-          currentEntityId: combat.turnOrder[combat.currentTurnIndex] ?? 'player',
-          combatLog: logLines.slice(-10),
-        },
-      };
-
-      const response = await adjudicate(req);
-      const events = applyAdjudication(combat, response, 'player');
-      for (const ev of events) logLines.push(ev.details);
-      if (response.narration && !response.noEffect) {
-        logLines.push(colorize(`* ${response.narration}`, COLORS.blessing));
-      }
-
-      // Handle Weight of Choice: lock abilities tracked in blessing state
-      if (combat.playerBlessing.state.usedAbilities) {
-        const used = combat.playerBlessing.state.usedAbilities as string[];
-        for (const entity of combat.entities) {
-          for (const ability of entity.abilities) {
-            if (used.includes(ability.id)) ability.lockedForCombat = true;
-          }
-        }
-      }
-    }
-
-    // Boss blessing second (with updated state)
-    if (combat.bossBlessing && combat.bossBlessing.triggers.includes(triggerCtx.trigger)) {
-      const req: AdjudicationRequest = {
-        blessingId: combat.bossBlessing.id,
-        blessingText: combat.bossBlessing.text,
-        blessingState: combat.bossBlessing.state,
-        triggerContext: triggerCtx,
-        gameState: {
-          entities: combat.entities,
-          turnNumber: combat.turnNumber,
-          currentEntityId: combat.turnOrder[combat.currentTurnIndex] ?? 'player',
-          combatLog: logLines.slice(-10),
-        },
-      };
-
-      const response = await adjudicate(req);
-      const events = applyAdjudication(combat, response, 'boss');
-      for (const ev of events) logLines.push(ev.details);
-      if (response.narration && !response.noEffect) {
-        logLines.push(colorize(`x ${response.narration}`, COLORS.enemy));
-      }
-    }
+): void {
+  const result = processBlessingTriggers(combat);
+  for (const n of result.narrations) {
+    logLines.push(n);
   }
 }
 

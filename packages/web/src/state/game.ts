@@ -1,15 +1,15 @@
 import { create } from 'zustand';
 import type {
   DailyContent, Entity, CharacterArchetype, Blessing, Item,
-  MapNode, BlessingRuntime, AdjudicationRequest,
+  MapNode, BlessingRuntime,
 } from '@manyworlds/shared';
 import { SeededRNG } from '@manyworlds/shared';
 import {
-  initCombat, processTurn, applyAdjudication, isPlayerTurn,
+  initCombat, processTurn, isPlayerTurn,
   getCurrentEntity, type CombatState, type PlayerAction, type TurnEvent,
 } from '@manyworlds/engine';
-import { applyExp, awardExp, awardGold, getFrontierNodes } from '@manyworlds/engine';
-import { fetchDailyContent, adjudicate } from '../api/client.js';
+import { applyExp, awardExp, awardGold, getFrontierNodes, createBlessingRuntime, processBlessingTriggers } from '@manyworlds/engine';
+import { fetchDailyContent } from '../api/client.js';
 
 export type Phase =
   | 'loading' | 'title' | 'interview' | 'blessing_select'
@@ -54,8 +54,8 @@ export interface GameStore {
   finishInterview: () => void;
   selectBlessing: (blessing: Blessing) => void;
   navigateToNode: (nodeId: string) => void;
-  startCombat: (enemies: Entity[], isBoss: boolean) => Promise<void>;
-  doPlayerAction: (action: PlayerAction) => Promise<void>;
+  startCombat: (enemies: Entity[], isBoss: boolean) => void;
+  doPlayerAction: (action: PlayerAction) => void;
   completeCombat: () => void;
   selectLevelUpAbility: (abilityId: string) => void;
   makeEventChoice: (choiceIndex: number) => void;
@@ -70,63 +70,12 @@ function cloneEntity(e: Entity): Entity {
 }
 
 function makeBlessingRuntime(b: Blessing, owner: 'player' | 'boss'): BlessingRuntime {
-  return {
-    id: b.id, name: b.name, text: b.text,
-    triggers: b.triggers as BlessingRuntime['triggers'],
-    blessingParams: { ...b.blessingParams },
-    state: {}, owner, visualEffect: b.visualEffect,
-  };
+  return createBlessingRuntime(b, owner);
 }
 
-async function handleBlessingTriggers(
-  combat: CombatState,
-  log: string[],
-): Promise<TurnEvent[]> {
-  const allEvents: TurnEvent[] = [];
-  const triggers = [...combat.pendingTriggers];
-  combat.pendingTriggers = [];
-
-  for (const ctx of triggers) {
-    for (const blessing of [combat.playerBlessing, combat.bossBlessing]) {
-      if (!blessing || !blessing.triggers.includes(ctx.trigger)) continue;
-
-      const req: AdjudicationRequest = {
-        blessingId: blessing.id,
-        blessingText: blessing.text,
-        blessingState: blessing.state,
-        triggerContext: ctx,
-        gameState: {
-          entities: combat.entities,
-          turnNumber: combat.turnNumber,
-          currentEntityId: combat.turnOrder[combat.currentTurnIndex] ?? 'player',
-          combatLog: log.slice(-10),
-        },
-      };
-
-      try {
-        const response = await adjudicate(req);
-        applyAdjudication(combat, response, blessing.owner);
-        // Show only narration (not mechanical "gains status" events — redundant)
-        if (response.narration && !response.noEffect) {
-          const prefix = blessing.owner === 'player' ? '*' : 'x';
-          log.push(`${prefix} ${response.narration}`);
-        }
-
-        // Weight of Choice: lock used abilities
-        if (blessing.state.usedAbilities) {
-          const used = blessing.state.usedAbilities as string[];
-          for (const entity of combat.entities) {
-            for (const ability of entity.abilities) {
-              if (used.includes(ability.id)) ability.lockedForCombat = true;
-            }
-          }
-        }
-      } catch (err) {
-        log.push(`[Adjudication error: ${err}]`);
-      }
-    }
-  }
-  return allEvents;
+function handleBlessingTriggers(combat: CombatState, log: string[]): void {
+  const result = processBlessingTriggers(combat);
+  for (const n of result.narrations) log.push(n);
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -268,7 +217,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
-  startCombat: async (enemies, isBoss) => {
+  startCombat: (enemies, isBoss) => {
     const { player, blessing, rng, content } = get();
     if (!player || !blessing || !rng) return;
     const bossBlessing = isBoss && content
@@ -287,13 +236,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Handle initial triggers, then auto-process enemy turns until it's the player's turn
     const initLog: string[] = [];
-    await handleBlessingTriggers(combat, initLog);
+    handleBlessingTriggers(combat, initLog);
 
     // If enemies are faster, process their turns first
     while (!isPlayerTurn(combat) && combat.status === 'active') {
       const enemyResult = processTurn(combat, null, rng);
       for (const ev of enemyResult.events) initLog.push(ev.details);
-      await handleBlessingTriggers(combat, initLog);
+      handleBlessingTriggers(combat, initLog);
     }
 
     set({ combat: { ...combat }, combatLog: initLog, processingTurn: false });
@@ -303,7 +252,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
-  doPlayerAction: async (action) => {
+  doPlayerAction: (action) => {
     const { combat, rng, combatLog } = get();
     if (!combat || !rng || get().processingTurn) return;
 
@@ -316,13 +265,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Player turn
     const result = processTurn(combat, action, rng);
     for (const ev of result.events) log.push(ev.details);
-    await handleBlessingTriggers(combat, log);
+    handleBlessingTriggers(combat, log);
 
     // Process all enemy turns until it's the player's turn again
     while (!isPlayerTurn(combat) && combat.status === 'active') {
       const enemyResult = processTurn(combat, null, rng);
       for (const ev of enemyResult.events) log.push(ev.details);
-      await handleBlessingTriggers(combat, log);
+      handleBlessingTriggers(combat, log);
     }
 
     set({ combat: { ...combat }, combatLog: log, processingTurn: false });

@@ -9,9 +9,9 @@
  * 3. Adjudication calls go through the server API
  */
 import type { Entity, Blessing, DailyContent } from '@manyworlds/shared';
-import type { BlessingRuntime, AdjudicationRequest, AdjudicationResponse } from '@manyworlds/shared';
+import type { BlessingRuntime } from '@manyworlds/shared';
 import { SeededRNG } from '@manyworlds/shared';
-import { getFrontierNodes } from '@manyworlds/engine';
+import { getFrontierNodes, createBlessingRuntime } from '@manyworlds/engine';
 import { applyExp } from '@manyworlds/engine';
 
 // Import scene functions from the CLI's TUI package
@@ -24,41 +24,24 @@ import { applyScanlines } from '../../cli/src/tui/animation.js';
 import { C } from '../../cli/src/tui/colors.js';
 
 import type { WebScreen } from './xterm-screen.js';
-import { adjudicate as apiAdjudicate } from './api/client.js';
 
 // Import stubs directly so the game works as a static site (no server needed)
 import { buildStubDailyContent } from '../../server/src/stubs/daily-content.js';
-import { adjudicate as mockAdjudicate } from '../../server/src/llm/adjudicator.js';
 
 function cloneEntity(e: Entity): Entity {
   return JSON.parse(JSON.stringify(e));
 }
 
 function makeBlessingRuntime(b: Blessing, owner: 'player' | 'boss'): BlessingRuntime {
-  return {
-    id: b.id, name: b.name, text: b.text,
-    triggers: b.triggers as BlessingRuntime['triggers'],
-    blessingParams: { ...b.blessingParams },
-    state: {}, owner, visualEffect: b.visualEffect,
-  };
+  return createBlessingRuntime(b, owner);
 }
 
 export async function runWebGame(screen: WebScreen): Promise<void> {
   // Game loop — restarts on victory/defeat
   while (true) {
   // Use embedded stubs (works offline / static deploy)
-  // Try the live API for adjudication, fall back to mock
   const content: DailyContent = buildStubDailyContent();
   const rng = new SeededRNG(content.seed);
-
-  async function adjudicateWrapper(req: AdjudicationRequest): Promise<AdjudicationResponse> {
-    try {
-      return await apiAdjudicate(req);
-    } catch {
-      // Server not available — use mock adjudicator
-      return mockAdjudicate(req);
-    }
-  }
 
   // Title
   await showTitleScene(screen as any, content);
@@ -117,8 +100,7 @@ export async function runWebGame(screen: WebScreen): Promise<void> {
 
         const result = await runCombatScene(
           screen as any, player, enemies, blessingRuntime, null,
-          blessing.text, '', rng, adjudicateWrapper,
-          archetype.spriteDescriptor?.palette,
+          rng, archetype.spriteDescriptor?.palette,
         );
 
         if (result.outcome === 'defeat') {
@@ -156,8 +138,7 @@ export async function runWebGame(screen: WebScreen): Promise<void> {
       const bossBlessing = makeBlessingRuntime(content.blessings.boss, 'boss');
       const result = await runCombatScene(
         screen as any, player, [boss], blessingRuntime, bossBlessing,
-        blessing.text, content.blessings.boss.text, rng, adjudicateWrapper,
-        archetype.spriteDescriptor?.palette,
+        rng, archetype.spriteDescriptor?.palette,
       );
 
       await showEndScreen(screen, player, blessingRuntime, visitedNodeIds.length, content,
