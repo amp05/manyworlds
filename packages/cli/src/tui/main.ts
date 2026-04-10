@@ -5,7 +5,7 @@
 import type { Entity, Blessing, DailyContent } from '@manyworlds/shared';
 import type { BlessingRuntime } from '@manyworlds/shared';
 import { SeededRNG } from '@manyworlds/shared';
-import { getFrontierNodes } from '@manyworlds/engine';
+import { getFrontierNodes, createBlessingRuntime } from '@manyworlds/engine';
 import { applyExp } from '@manyworlds/engine';
 import { Screen, C } from './screen.js';
 import { applyScanlines, wipeTransition, typewrite } from './animation.js';
@@ -13,19 +13,14 @@ import { showTitleScene } from './scenes/title.js';
 import { runInterviewScene } from './scenes/interview.js';
 import { runBlessingScene } from './scenes/blessing.js';
 import { runCombatScene } from './scenes/combat.js';
-import { buildStubDailyContent, adjudicate } from '../stubs.js';
+import { buildStubDailyContent } from '../stubs.js';
 
 function cloneEntity(e: Entity): Entity {
   return JSON.parse(JSON.stringify(e));
 }
 
 function makeBlessingRuntime(b: Blessing, owner: 'player' | 'boss'): BlessingRuntime {
-  return {
-    id: b.id, name: b.name, text: b.text,
-    triggers: b.triggers as BlessingRuntime['triggers'],
-    blessingParams: { ...b.blessingParams },
-    state: {}, owner, visualEffect: b.visualEffect,
-  };
+  return createBlessingRuntime(b, owner);
 }
 
 export async function startTuiGame(existingScreen?: Screen): Promise<void> {
@@ -97,8 +92,7 @@ export async function startTuiGame(existingScreen?: Screen): Promise<void> {
           const bossBlessing = null;
           const result = await runCombatScene(
             screen, player, enemies, blessingRuntime, bossBlessing,
-            blessing.text, '', rng, adjudicate,
-            archetype.spriteDescriptor?.palette,
+            rng, archetype.spriteDescriptor?.palette,
           );
 
           if (result.outcome === 'defeat') {
@@ -153,8 +147,7 @@ export async function startTuiGame(existingScreen?: Screen): Promise<void> {
         const bossBlessing = makeBlessingRuntime(content.blessings.boss, 'boss');
         const result = await runCombatScene(
           screen, player, [boss], blessingRuntime, bossBlessing,
-          blessing.text, content.blessings.boss.text, rng, adjudicate,
-          archetype.spriteDescriptor?.palette,
+          rng, archetype.spriteDescriptor?.palette,
         );
 
         if (result.outcome === 'victory') {

@@ -3,12 +3,11 @@
  * Uses the RNG to make all decisions. Useful for testing the engine end-to-end.
  */
 import type { Entity } from '@manyworlds/shared';
-import type { BlessingRuntime, AdjudicationRequest } from '@manyworlds/shared';
+import type { BlessingRuntime } from '@manyworlds/shared';
 import { SeededRNG } from '@manyworlds/shared';
 import {
   initCombat,
   processTurn,
-  applyAdjudication,
   isPlayerTurn,
   getCurrentEntity,
   type CombatState,
@@ -16,60 +15,24 @@ import {
 } from '@manyworlds/engine';
 import { applyExp, awardExp, awardGold } from '@manyworlds/engine';
 import { getFrontierNodes } from '@manyworlds/engine';
-import { buildStubDailyContent, adjudicate } from './stubs.js';
+import { createBlessingRuntime, processBlessingTriggers } from '@manyworlds/engine';
+import { buildStubDailyContent } from './stubs.js';
 
 function log(msg: string) { console.log(`[SIM] ${msg}`); }
 
-async function handleTriggers(combat: CombatState): Promise<void> {
-  const triggers = [...combat.pendingTriggers];
-  combat.pendingTriggers = [];
-
-  for (const triggerCtx of triggers) {
-    for (const blessing of [combat.playerBlessing, combat.bossBlessing]) {
-      if (!blessing || !blessing.triggers.includes(triggerCtx.trigger)) continue;
-
-      const req: AdjudicationRequest = {
-        blessingId: blessing.id,
-        blessingText: blessing.text,
-        blessingState: blessing.state,
-        triggerContext: triggerCtx,
-        gameState: {
-          entities: combat.entities,
-          turnNumber: combat.turnNumber,
-          currentEntityId: combat.turnOrder[combat.currentTurnIndex] ?? 'player',
-          combatLog: [],
-        },
-      };
-
-      const response = await adjudicate(req);
-      applyAdjudication(combat, response, blessing.owner);
-
-      if (response.narration && !response.noEffect) {
-        log(`  [Blessing] ${response.narration}`);
-      }
-
-      // Weight of Choice: lock used abilities
-      if (blessing.state.usedAbilities) {
-        const used = blessing.state.usedAbilities as string[];
-        for (const entity of combat.entities) {
-          for (const ability of entity.abilities) {
-            if (used.includes(ability.id)) ability.lockedForCombat = true;
-          }
-        }
-      }
-    }
-  }
-}
-
-async function simulateCombat(
+function simulateCombat(
   player: Entity,
   enemies: Entity[],
   playerBlessing: BlessingRuntime,
   bossBlessing: BlessingRuntime | null,
   rng: SeededRNG,
-): Promise<'victory' | 'defeat'> {
+): 'victory' | 'defeat' {
   const combat = initCombat(enemies, player, playerBlessing, bossBlessing, rng);
-  await handleTriggers(combat);
+
+  // Process initial triggers
+  const initResult = processBlessingTriggers(combat);
+  for (const n of initResult.narrations) log(`  ${n}`);
+
   let turns = 0;
 
   while (combat.status === 'active' && turns < 100) {
@@ -85,7 +48,6 @@ async function simulateCombat(
       );
 
       if (hpPct < 0.4 && healItems.length > 0) {
-        // Use a healing item
         action = { type: 'item', itemId: healItems[0].id };
       } else {
         const available = current.abilities.filter(
@@ -108,7 +70,9 @@ async function simulateCombat(
       if (ev.type !== 'info') log(`  ${ev.details}`);
     }
 
-    await handleTriggers(combat);
+    const triggerResult = processBlessingTriggers(combat);
+    for (const n of triggerResult.narrations) log(`  [Blessing] ${n}`);
+
     turns++;
   }
 
@@ -142,15 +106,7 @@ async function main() {
 
   // Pick Borrowed Time (less punishing for a dumb AI)
   const blessing = content.blessings.player[1];
-  const blessingRuntime: BlessingRuntime = {
-    id: blessing.id,
-    name: blessing.name,
-    text: blessing.text,
-    triggers: blessing.triggers as BlessingRuntime['triggers'],
-    blessingParams: { ...blessing.blessingParams },
-    state: {},
-    owner: 'player',
-  };
+  const blessingRuntime = createBlessingRuntime(blessing, 'player');
   log(`Blessing: ${blessing.name}`);
 
   // Walk the map
@@ -168,7 +124,7 @@ async function main() {
       if (encounter) {
         const enemies = encounter.enemies.map((e) => JSON.parse(JSON.stringify(e)) as Entity);
         log(`Enemies: ${enemies.map((e) => e.name).join(', ')}`);
-        const result = await simulateCombat(player, enemies, blessingRuntime, null, rng);
+        const result = simulateCombat(player, enemies, blessingRuntime, null, rng);
         log(`Result: ${result}`);
         if (result === 'defeat') { alive = false; break; }
 
@@ -189,23 +145,14 @@ async function main() {
       player.stats.mp = player.stats.maxMp;
       log(`Rested: HP ${player.stats.hp}/${player.stats.maxHp}`);
     } else if (node.type === 'event') {
-      // Events can give gold, items, or stat boosts — just take gold for simplicity
       log(`Event: gained some gold`);
     } else if (node.type === 'shop') {
       log(`Shop: skipped`);
     } else if (node.type === 'boss') {
       const boss = JSON.parse(JSON.stringify(content.bossEncounter.boss)) as Entity;
-      const bossB: BlessingRuntime = {
-        id: content.blessings.boss.id,
-        name: content.blessings.boss.name,
-        text: content.blessings.boss.text,
-        triggers: content.blessings.boss.triggers as BlessingRuntime['triggers'],
-        blessingParams: { ...content.blessings.boss.blessingParams },
-        state: {},
-        owner: 'boss',
-      };
+      const bossB = createBlessingRuntime(content.blessings.boss, 'boss');
       log(`BOSS: ${boss.name}`);
-      const result = await simulateCombat(player, [boss], blessingRuntime, bossB, rng);
+      const result = simulateCombat(player, [boss], blessingRuntime, bossB, rng);
       log(`Result: ${result}`);
       if (result === 'defeat') alive = false;
       break; // Boss is the end

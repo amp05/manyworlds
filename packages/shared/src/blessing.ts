@@ -1,6 +1,14 @@
 import type { BlessingTrigger, TriggerContext } from './blessing-triggers.js';
 import type { Entity } from './types.js';
 
+/** Synchronous blessing execute function — replaces LLM adjudication. */
+export type BlessingExecuteFn = (
+  ctx: TriggerContext,
+  gameState: { entities: Entity[]; turnNumber: number; currentEntityId: string },
+  blessingState: Record<string, unknown>,
+  owner: 'player' | 'boss',
+) => AdjudicationResponse;
+
 export interface BlessingRuntime {
   id: string;
   name: string;
@@ -13,6 +21,7 @@ export interface BlessingRuntime {
   state: Record<string, unknown>;
   owner: 'player' | 'boss';
   visualEffect?: string;
+  execute: BlessingExecuteFn;
 }
 
 export interface AdjudicationRequest {
